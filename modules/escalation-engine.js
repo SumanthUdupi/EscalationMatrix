@@ -168,8 +168,12 @@ export class EscalationEngine {
 
                 // Check if this level has already been triggered
                 if (!escalation.triggeredLevels.has(trigger.level)) {
-                    await this.executeEscalation(template, record, trigger.level, now);
-                    escalation.triggeredLevels.add(trigger.level);
+                    const result = await this.executeEscalation(template, record, trigger.level, now);
+
+                    // Only mark as triggered if not deferred
+                    if (!result || result.status !== 'deferred') {
+                        escalation.triggeredLevels.add(trigger.level);
+                    }
                 }
             }
         }
@@ -217,6 +221,20 @@ export class EscalationEngine {
 
     async executeEscalation(template, record, level, now) {
         try {
+            // Check schedule context (REQ-016)
+            // Find the trigger for this level to check its schedule context
+            const trigger = template.triggers.find(t => t.level === level);
+            if (trigger && trigger.scheduleContext === 'business-hours') {
+                if (!this.isBusinessHour(now)) {
+                    console.log(`Escalation for ${template.name} Level ${level} deferred: Outside business hours`);
+                    // Throw special error to indicate deferral, or return a status object if the caller supports it.
+                    // Given the current architecture where executeEscalation is void, we log and return.
+                    // However, we should ensure this isn't treated as a "failure" that stops retries (it won't be, as we don't log a completion).
+                    // To be safer and more explicit:
+                    return { status: 'deferred', reason: 'outside_business_hours' };
+                }
+            }
+
             const hierarchyLevel = template.hierarchy.find(h => h.level === level);
 
             if (!hierarchyLevel) {
@@ -246,6 +264,20 @@ export class EscalationEngine {
         } catch (error) {
             console.error('Error executing escalation:', error);
         }
+    }
+
+    // Check if a given time is within business hours (Mon-Fri, 9am-5pm)
+    isBusinessHour(date) {
+        const day = date.getDay(); // 0 = Sun, 6 = Sat
+        const hour = date.getHours();
+
+        // Check if weekend (Sat or Sun)
+        if (day === 0 || day === 6) return false;
+
+        // Check if outside 9am - 5pm
+        if (hour < 9 || hour >= 17) return false;
+
+        return true;
     }
 
     async resolveRecipients(hierarchyLevel, record) {
@@ -329,5 +361,69 @@ export class EscalationEngine {
     async getRecordById(module, recordId) {
         const records = await this.dataManager.getRecords(module);
         return records.find(r => r.id === recordId);
+    }
+
+    // Simulator for "Time Machine" (REQ-009)
+    simulateTriggers(template, record) {
+        const results = [];
+        const triggers = template.triggers || [];
+
+        // We simulate relative to now, but based on record dates
+        const now = new Date();
+
+        triggers.forEach(trigger => {
+            if (trigger.type === 'time-based') {
+                const refDate = this.safeDateParse(record[trigger.referenceField]);
+                if (refDate) {
+                    let triggerDate = new Date(refDate);
+                    let description = '';
+
+                    if (trigger.daysBefore) {
+                         triggerDate.setDate(refDate.getDate() - trigger.daysBefore);
+                         description = `${trigger.daysBefore} days before ${trigger.referenceField}`;
+                    } else if (trigger.daysAfter) {
+                         triggerDate.setDate(refDate.getDate() + trigger.daysAfter);
+                         description = `${trigger.daysAfter} days after ${trigger.referenceField}`;
+                    } else {
+                         description = `On ${trigger.referenceField}`;
+                    }
+
+                    // Adjust for business hours if needed
+                    let adjustedDate = new Date(triggerDate);
+                    let isAdjusted = false;
+                    if (trigger.scheduleContext === 'business-hours') {
+                         // Simple simulation: if weekend, move to Monday 9am
+                         // If outside hours, move to next 9am
+                         // Note: This logic duplicates isBusinessHour but "finds next slot"
+                         while (!this.isBusinessHour(adjustedDate)) {
+                             adjustedDate.setHours(adjustedDate.getHours() + 1);
+                             isAdjusted = true;
+                         }
+                    }
+
+                    results.push({
+                        level: trigger.level,
+                        triggerDate: triggerDate,
+                        adjustedDate: isAdjusted ? adjustedDate : triggerDate,
+                        description: description,
+                        status: adjustedDate < now ? 'Already Triggered' : 'Scheduled',
+                        isAdjusted: isAdjusted
+                    });
+                } else {
+                     results.push({
+                        level: trigger.level,
+                        error: `Invalid reference field: ${trigger.referenceField}`
+                     });
+                }
+            } else {
+                 results.push({
+                     level: trigger.level,
+                     description: `Event: ${trigger.field} = ${trigger.value}`,
+                     status: this.checkEventTrigger(trigger, record, now) ? 'Condition Met' : 'Condition Not Met'
+                 });
+            }
+        });
+
+        return results.sort((a, b) => (a.adjustedDate || 0) - (b.adjustedDate || 0));
     }
 }

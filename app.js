@@ -337,6 +337,11 @@ class EscalationMatrixApp {
                         </div>
                     </div>
                 </div>
+                                <div class="mt-4">
+                                     <h3>Simulation (REQ-009)</h3>
+                                     <button class="btn btn-secondary w-full" style="width: 100%" onclick="app.runSimulation()">Test with Record</button>
+                                     <div id="simulationResults" class="mt-2" style="font-size: 0.8rem; background: #f8fafc; padding: 0.5rem; border-radius: 4px; display: none;"></div>
+                                </div>
             </div>
 
             <div class="grid grid-2">
@@ -1062,6 +1067,13 @@ class EscalationMatrixApp {
                 return;
             }
 
+            // Check for hierarchy gaps (REQ-007)
+            const hierarchyWarnings = await this.checkHierarchyGaps(template);
+            if (hierarchyWarnings.length > 0) {
+                const confirmed = confirm(`Warning: ${hierarchyWarnings.join('\n')}\n\nDo you want to proceed anyway?`);
+                if (!confirmed) return;
+            }
+
             // Save template
             await this.dataManager.saveTemplate(template);
 
@@ -1072,6 +1084,34 @@ class EscalationMatrixApp {
             console.error('Error creating template:', error);
             this.showToast('Failed to create template', 'error');
         }
+    }
+
+    async checkHierarchyGaps(template) {
+        const warnings = [];
+
+        // Identify potential departments this template applies to
+        let targetDepartments = [null];
+
+        const deptRule = template.applicabilityRules.find(r => r.field.toLowerCase() === 'department' && r.operator === 'equals');
+        if (deptRule) {
+            targetDepartments = [deptRule.value];
+        } else {
+             targetDepartments = [null];
+        }
+
+        for (const level of template.hierarchy) {
+            for (const role of level.roles) {
+                for (const dept of targetDepartments) {
+                    const users = await this.dataManager.getUsersByRole(role, dept);
+                    if (users.length === 0) {
+                        const deptMsg = dept ? ` for department '${dept}'` : '';
+                        warnings.push(`Role '${role}' is currently empty${deptMsg}. Escalations to Level ${level.level} may fail.`);
+                    }
+                }
+            }
+        }
+
+        return warnings;
     }
 
     collectRules() {
@@ -1125,6 +1165,7 @@ class EscalationMatrixApp {
             const type = document.getElementById(`trigger-type-${i}`)?.value;
             const level = parseInt(document.getElementById(`trigger-level-${i}`)?.value);
             const config = document.getElementById(`trigger-config-${i}`)?.value;
+            const schedule = document.getElementById(`trigger-schedule-${i}`)?.value || '24/7';
 
             if (type && level && config) {
                 if (type === 'time-based') {
@@ -1137,7 +1178,8 @@ class EscalationMatrixApp {
                             level,
                             referenceField: sanitizeHTML(match[3]),
                             daysBefore: match[2] === 'hour' ? 0 : match[2] === 'day' ? parseInt(match[1]) : parseInt(match[1]) * 7,
-                            daysAfter: 0
+                            daysAfter: 0,
+                            scheduleContext: schedule
                         });
                     }
                 } else {
@@ -1147,7 +1189,8 @@ class EscalationMatrixApp {
                         type,
                         level,
                         field: sanitizeHTML(sanitizedConfig.split('=')[0]?.trim()),
-                        value: sanitizeHTML(sanitizedConfig.split('=')[1]?.trim())
+                        value: sanitizeHTML(sanitizedConfig.split('=')[1]?.trim()),
+                        scheduleContext: schedule
                     });
                 }
             }
@@ -1231,7 +1274,7 @@ class EscalationMatrixApp {
             <div id="rules-container">
                 <div class="rule-item mb-3">
                     <div class="grid grid-4 gap-2">
-                        <select class="form-select" id="rule-field-1">
+                        <select class="form-select" id="rule-field-1" onchange="app.updateFieldOptions(1)">
                             <option value="">Select field</option>
                             <option value="priority">Priority</option>
                             <option value="status">Status</option>
@@ -1245,7 +1288,8 @@ class EscalationMatrixApp {
                             <option value="greaterThan">Greater Than</option>
                             <option value="lessThan">Less Than</option>
                         </select>
-                        <input type="text" class="form-input" id="rule-value-1" placeholder="Value">
+                        <input type="text" class="form-input" id="rule-value-1" placeholder="Value" list="rule-options-1">
+                        <datalist id="rule-options-1"></datalist>
                         <select class="form-select" id="rule-logic-1">
                             <option value="AND">AND</option>
                             <option value="OR">OR</option>
@@ -1262,6 +1306,35 @@ class EscalationMatrixApp {
                 <div id="rules-preview" class="text-muted">No rules defined yet</div>
             </div>
         `;
+    }
+
+    async updateFieldOptions(ruleIndex) {
+        const fieldSelect = document.getElementById(`rule-field-${ruleIndex}`);
+        const dataList = document.getElementById(`rule-options-${ruleIndex}`);
+        if (!fieldSelect || !dataList) return;
+
+        const field = fieldSelect.value;
+        const module = document.getElementById('template-module').value;
+
+        if (field && module) {
+            // Fetch unique values for this field from existing records
+            const records = await this.dataManager.getRecords(module);
+            const values = new Set();
+
+            records.forEach(record => {
+                if (record[field]) {
+                    values.add(record[field]);
+                }
+            });
+
+            // Also add some known defaults based on field name if record data is sparse
+            if (field === 'priority') ['Critical', 'High', 'Medium', 'Low'].forEach(v => values.add(v));
+            if (field === 'status') ['Open', 'In Progress', 'Resolved', 'Closed'].forEach(v => values.add(v));
+
+            dataList.innerHTML = Array.from(values).sort().map(val => `<option value="${sanitizeHTML(val)}">`).join('');
+        } else {
+            dataList.innerHTML = '';
+        }
     }
 
     renderWizardStep3() {
@@ -1302,7 +1375,14 @@ class EscalationMatrixApp {
                             <option value="2">Level 2</option>
                             <option value="3">Level 3</option>
                         </select>
-                        <input type="text" class="form-input" placeholder="Configuration">
+                        <input type="text" class="form-input" id="trigger-config-1" placeholder="Configuration">
+                    </div>
+                    <div class="mt-2">
+                         <label class="form-label text-sm">Schedule Context (REQ-016)</label>
+                         <select class="form-select text-sm" id="trigger-schedule-1" style="width: auto; display: inline-block;">
+                             <option value="24/7">24/7 (Always Send)</option>
+                             <option value="business-hours">Business Hours Only (Mon-Fri 9-5)</option>
+                         </select>
                     </div>
                 </div>
             </div>
@@ -1424,6 +1504,62 @@ This is an automated escalation notification.</textarea>
         this.showToast('Test notification sent successfully', 'success');
     }
 
+    // Run simulation for the current template configuration (REQ-009)
+    async runSimulation() {
+        const resultsContainer = document.getElementById('simulationResults');
+        resultsContainer.style.display = 'block';
+        resultsContainer.innerHTML = 'Running simulation...';
+
+        try {
+            // Collect current template state
+            const template = {
+                name: "Simulation Template",
+                module: document.getElementById('template-module').value,
+                triggers: this.collectTriggers(),
+                applicabilityRules: this.collectRules(), // Include for completeness
+            };
+
+            // Get a sample record
+            const record = await this.dataManager.getSampleRecord(template.module);
+            if (!record) {
+                resultsContainer.innerHTML = 'No sample record found for this module.';
+                return;
+            }
+
+            // Run simulation
+            const results = this.escalationEngine.simulateTriggers(template, record);
+
+            // Display results
+            if (results.length === 0) {
+                resultsContainer.innerHTML = 'No triggers would fire for the sample record.';
+            } else {
+                let html = `<strong>Simulation for record ${record.id}:</strong><ul style="padding-left: 1.2rem; margin-top: 0.5rem;">`;
+                results.forEach(res => {
+                    if (res.error) {
+                        html += `<li style="color: var(--error-color)">Level ${res.level}: ${res.error}</li>`;
+                    } else if (res.triggerDate) {
+                        const dateStr = res.adjustedDate.toLocaleString();
+                        const note = res.isAdjusted ? ' (Adjusted for Business Hours)' : '';
+                        const statusColor = res.status === 'Already Triggered' ? 'var(--text-muted)' : 'var(--success-color)';
+                        html += `<li>
+                            <strong>Level ${res.level}</strong>: ${dateStr}${note}
+                            <br><small style="color: ${statusColor}">${res.description} • ${res.status}</small>
+                        </li>`;
+                    } else {
+                        // Event based
+                        html += `<li><strong>Level ${res.level}</strong>: ${res.description} - ${res.status}</li>`;
+                    }
+                });
+                html += '</ul>';
+                resultsContainer.innerHTML = html;
+            }
+
+        } catch (error) {
+            console.error('Simulation error:', error);
+            resultsContainer.innerHTML = 'Error running simulation: ' + error.message;
+        }
+    }
+
     addRule() {
         const rulesContainer = document.getElementById('rules-container');
         const ruleCount = rulesContainer.children.length + 1;
@@ -1432,7 +1568,7 @@ This is an automated escalation notification.</textarea>
         ruleDiv.className = 'rule-item mb-3';
         ruleDiv.innerHTML = `
             <div class="grid grid-4 gap-2">
-                <select class="form-select" id="rule-field-${ruleCount}">
+                <select class="form-select" id="rule-field-${ruleCount}" onchange="app.updateFieldOptions(${ruleCount})">
                     <option value="">Select field</option>
                     <option value="priority">Priority</option>
                     <option value="status">Status</option>
@@ -1446,7 +1582,8 @@ This is an automated escalation notification.</textarea>
                     <option value="greaterThan">Greater Than</option>
                     <option value="lessThan">Less Than</option>
                 </select>
-                <input type="text" class="form-input" id="rule-value-${ruleCount}" placeholder="Value">
+                <input type="text" class="form-input" id="rule-value-${ruleCount}" placeholder="Value" list="rule-options-${ruleCount}">
+                <datalist id="rule-options-${ruleCount}"></datalist>
                 <select class="form-select" id="rule-logic-${ruleCount}">
                     <option value="AND">AND</option>
                     <option value="OR">OR</option>
@@ -1540,6 +1677,13 @@ This is an automated escalation notification.</textarea>
                     <option value="4">Level 4</option>
                 </select>
                 <input type="text" class="form-input" id="trigger-config-${triggerCount}" placeholder="Configuration">
+            </div>
+            <div class="mt-2">
+                 <label class="form-label text-sm">Schedule Context (REQ-016)</label>
+                 <select class="form-select text-sm" id="trigger-schedule-${triggerCount}" style="width: auto; display: inline-block;">
+                     <option value="24/7">24/7 (Always Send)</option>
+                     <option value="business-hours">Business Hours Only (Mon-Fri 9-5)</option>
+                 </select>
             </div>
         `;
 

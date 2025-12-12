@@ -400,46 +400,149 @@ class EscalationMatrixApp {
     async renderTemplates() {
         const templates = await this.dataManager.getAllTemplates();
 
+        // State for search/filter (simple closure implementation since we re-render)
+        // In a real framework, this would be component state
+        if (!this.templateViewState) {
+            this.templateViewState = {
+                search: '',
+                status: 'all',
+                module: 'all'
+            };
+        }
+
+        // Apply filters
+        const filteredTemplates = templates.filter(t => {
+            const matchesSearch = t.name.toLowerCase().includes(this.templateViewState.search.toLowerCase());
+            const matchesStatus = this.templateViewState.status === 'all' ||
+                (this.templateViewState.status === 'active' && t.active) ||
+                (this.templateViewState.status === 'inactive' && !t.active);
+            const matchesModule = this.templateViewState.module === 'all' || t.module === this.templateViewState.module;
+            return matchesSearch && matchesStatus && matchesModule;
+        });
+
+        // Generate module options
+        const modules = [...new Set(templates.map(t => t.module))];
+
         return `
             <div class="section-header">
                 <h1 class="section-title">Escalation Templates</h1>
                 <p class="section-description">Manage and configure escalation templates</p>
             </div>
 
-            <div class="mb-4">
+            <div class="flex justify-between items-center mb-4 gap-3 flex-wrap">
                 <button class="btn btn-primary" onclick="app.navigateToSection('editor')">
-                    Create New Template
+                    <span style="font-size: 1.2em">+</span> Create New Template
                 </button>
+
+                <div class="filter-controls flex gap-2 items-center">
+                    <input type="text"
+                        class="form-input search-input"
+                        placeholder="Search templates..."
+                        value="${sanitizeHTML(this.templateViewState.search)}"
+                        oninput="app.updateTemplateFilter('search', this.value)"
+                    >
+                    <select class="form-select" style="width: auto;" onchange="app.updateTemplateFilter('status', this.value)">
+                        <option value="all" ${this.templateViewState.status === 'all' ? 'selected' : ''}>All Status</option>
+                        <option value="active" ${this.templateViewState.status === 'active' ? 'selected' : ''}>Active</option>
+                        <option value="inactive" ${this.templateViewState.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                    </select>
+                    <select class="form-select" style="width: auto;" onchange="app.updateTemplateFilter('module', this.value)">
+                        <option value="all" ${this.templateViewState.module === 'all' ? 'selected' : ''}>All Modules</option>
+                        ${modules.map(m => `<option value="${sanitizeHTML(m)}" ${this.templateViewState.module === m ? 'selected' : ''}>${sanitizeHTML(m)}</option>`).join('')}
+                    </select>
+                </div>
             </div>
 
-            <div class="grid grid-3">
-                ${templates.map(template => `
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">${sanitizeHTML(template.name)}</h3>
-                            <p class="card-description">${sanitizeHTML(template.module)} • ${template.applicabilityRules.length} rules</p>
-                        </div>
-                        <div class="mb-3">
-                            <span class="badge badge-info">${sanitizeHTML(template.module)}</span>
-                            <span class="badge badge-${template.active ? 'success' : 'secondary'}">
-                                ${template.active ? 'Active' : 'Inactive'}
-                            </span>
-                        </div>
-                        <div class="flex gap-2">
-                            <button class="btn btn-secondary btn-sm" onclick="app.editTemplate('${sanitizeHTML(template.id)}')">
-                                Edit
-                            </button>
-                            <button class="btn btn-secondary btn-sm" onclick="app.duplicateTemplate('${sanitizeHTML(template.id)}')">
-                                Duplicate
-                            </button>
-                            <button class="btn btn-danger btn-sm" onclick="app.deleteTemplate('${sanitizeHTML(template.id)}')">
-                                Delete
-                            </button>
-                        </div>
-                    </div>
-                `).join('')}
+            <div class="card">
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Module</th>
+                                <th>Status</th>
+                                <th>Rules</th>
+                                <th>Last Modified</th>
+                                <th>Author</th>
+                                <th class="text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filteredTemplates.length > 0 ? filteredTemplates.map(template => `
+                                <tr>
+                                    <td>
+                                        <div style="font-weight: 600;">${sanitizeHTML(template.name)}</div>
+                                        <div class="text-sm text-muted">${sanitizeHTML(template.description || '')}</div>
+                                    </td>
+                                    <td><span class="badge badge-info">${sanitizeHTML(template.module)}</span></td>
+                                    <td>
+                                        <span class="badge badge-${template.active ? 'success' : 'secondary'}">
+                                            ${template.active ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </td>
+                                    <td>${template.applicabilityRules.length}</td>
+                                    <td>${new Date(template.updatedAt || template.createdAt || Date.now()).toLocaleDateString()}</td>
+                                    <td>System Admin</td>
+                                    <td class="text-right">
+                                        <div class="flex gap-2 justify-end">
+                                            <button class="btn btn-secondary btn-sm" onclick="app.toggleTemplateStatus('${sanitizeHTML(template.id)}', ${!template.active})" title="${template.active ? 'Deactivate' : 'Activate'}">
+                                                ${template.active ? '🚫' : '✅'}
+                                            </button>
+                                            <button class="btn btn-secondary btn-sm" onclick="app.editTemplate('${sanitizeHTML(template.id)}')" title="Edit">
+                                                ✏️
+                                            </button>
+                                            <button class="btn btn-secondary btn-sm" onclick="app.duplicateTemplate('${sanitizeHTML(template.id)}')" title="Duplicate">
+                                                📋
+                                            </button>
+                                            <button class="btn btn-danger btn-sm" onclick="app.deleteTemplate('${sanitizeHTML(template.id)}')" title="Delete">
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `).join('') : `
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted" style="padding: 2rem;">
+                                        No templates found matching your criteria.
+                                    </td>
+                                </tr>
+                            `}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex justify-between items-center mt-3 text-sm text-muted">
+                     <div>Showing ${filteredTemplates.length} of ${templates.length} templates</div>
+                     <!-- Pagination could go here -->
+                </div>
             </div>
         `;
+    }
+
+    updateTemplateFilter(key, value) {
+        if (!this.templateViewState) this.templateViewState = {};
+        this.templateViewState[key] = value;
+
+        // Debounce render for search
+        if (key === 'search') {
+            if (this.searchTimeout) clearTimeout(this.searchTimeout);
+            this.searchTimeout = setTimeout(() => {
+                this.loadSection('templates');
+            }, 300);
+        } else {
+            this.loadSection('templates');
+        }
+    }
+
+    async toggleTemplateStatus(id, newStatus) {
+        const templates = await this.dataManager.getAllTemplates();
+        const template = templates.find(t => t.id === id);
+        if (template) {
+            template.active = newStatus;
+            template.updatedAt = new Date().toISOString();
+            await this.dataManager.saveTemplate(template);
+            this.showToast(`Template ${newStatus ? 'activated' : 'deactivated'} successfully`, 'success');
+            this.loadSection('templates');
+        }
     }
 
     async renderTemplateEditor() {
@@ -481,25 +584,71 @@ class EscalationMatrixApp {
 
     renderWizardStep1() {
         return `
-            <h3>Basic Information</h3>
-            <div class="form-group">
-                <label class="form-label" for="template-name">Template Name</label>
-                <input type="text" id="template-name" class="form-input" placeholder="Enter template name" required>
+            <div class="flex justify-between items-center mb-3">
+                <div>
+                    <h3>Basic Information</h3>
+                    <p class="text-muted">General settings for this escalation template.</p>
+                </div>
             </div>
-            <div class="form-group">
-                <label class="form-label" for="template-module">Module</label>
-                <select id="template-module" class="form-select" required>
-                    <option value="">Select module</option>
-                    <option value="incidents">Incidents</option>
-                    <option value="work-permits">Work Permits</option>
-                    <option value="audits">Audits</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="template-description">Description</label>
-                <textarea id="template-description" class="form-textarea" placeholder="Describe the purpose of this template"></textarea>
+
+            <div class="card p-3">
+                <div class="form-group">
+                    <label class="form-label" for="template-name">Template Name <span class="text-danger">*</span></label>
+                    <input type="text" id="template-name" class="form-input" placeholder="e.g. Critical Incident Escalation" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="template-module">Module <span class="text-danger">*</span></label>
+                    <select id="template-module" class="form-select" required onchange="app.handleModuleChange()">
+                        <option value="">Select module</option>
+                        <option value="incidents">Incidents</option>
+                        <option value="work-permits">Work Permits</option>
+                        <option value="audits">Audits</option>
+                    </select>
+                    <small class="text-muted">Changing module will reset module-specific rules.</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="template-description">Description</label>
+                    <textarea id="template-description" class="form-textarea" placeholder="Describe the purpose of this template (optional)"></textarea>
+                </div>
+
+                <!-- Tags UI -->
+                <div class="form-group">
+                    <label class="form-label">Tags</label>
+                    <div class="tags-input-container border border-color rounded p-2 flex flex-wrap gap-2 items-center bg-white">
+                        <div id="active-tags" class="flex flex-wrap gap-2"></div>
+                        <input type="text" id="tag-input" class="border-0 outline-none flex-1" placeholder="Add tag..." style="min-width: 100px;">
+                    </div>
+                    <small class="text-muted">Press Enter to add tags (e.g. "Safety", "Urgent")</small>
+                </div>
             </div>
         `;
+    }
+
+    handleModuleChange() {
+        // Logic to reset subsequent steps if needed, or just warn user
+        // For prototype, we just log
+        console.log('Module changed, rules might need update');
+    }
+
+    initializeTags() {
+        const tagInput = document.getElementById('tag-input');
+        const tagsContainer = document.getElementById('active-tags');
+
+        if (tagInput) {
+            tagInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const val = tagInput.value.trim();
+                    if (val) {
+                        const tag = document.createElement('span');
+                        tag.className = 'badge badge-secondary flex items-center gap-1';
+                        tag.innerHTML = `${sanitizeHTML(val)} <span class="cursor-pointer ml-1 font-bold" onclick="this.parentElement.remove()">×</span>`;
+                        tagsContainer.appendChild(tag);
+                        tagInput.value = '';
+                    }
+                }
+            });
+        }
     }
 
     async renderMonitoring() {
@@ -1203,7 +1352,8 @@ class EscalationMatrixApp {
         return {
             email: {
                 subject: sanitizeHTML(document.getElementById('email-subject')?.value || 'Escalation: {{id}}'),
-                body: sanitizeHTML(document.getElementById('email-body')?.value || 'Please review the escalated item: {{actionUrl}}')
+                body: sanitizeHTML(document.getElementById('email-body')?.value || 'Please review the escalated item: {{actionUrl}}'),
+                signature: sanitizeHTML(document.getElementById('email-signature')?.value || '')
             },
             sms: sanitizeHTML(document.getElementById('sms-body')?.value || 'Escalation: {{id}} - {{actionUrl}}')
         };
@@ -1228,7 +1378,7 @@ class EscalationMatrixApp {
         }
     }
 
-    updateWizardStep(step) {
+    async updateWizardStep(step) {
         // Update step indicators
         document.querySelectorAll('.wizard-step').forEach((el, index) => {
             el.classList.remove('active', 'completed');
@@ -1244,68 +1394,183 @@ class EscalationMatrixApp {
         switch (step) {
             case 1:
                 content.innerHTML = this.renderWizardStep1();
+                this.initializeTags();
                 break;
             case 2:
                 content.innerHTML = this.renderWizardStep2();
                 break;
             case 3:
                 content.innerHTML = this.renderWizardStep3();
+                await this.refreshHierarchy();
                 break;
             case 4:
                 content.innerHTML = this.renderWizardStep4();
                 break;
             case 5:
                 content.innerHTML = this.renderWizardStep5();
+                // Initialize default preview
+                this.updateEmailPreviewRender();
                 break;
         }
 
         // Update navigation buttons
         const prevBtn = document.getElementById('wizard-prev');
         const nextBtn = document.getElementById('wizard-next');
+        const totalSteps = 5;
 
         prevBtn.disabled = step === 1;
         nextBtn.textContent = step === totalSteps ? 'Create Template' : 'Next';
     }
 
     renderWizardStep2() {
+        const module = document.getElementById('template-module')?.value || 'incidents';
+        const fields = this.getFieldsForModule(module);
+
         return `
-            <h3>Applicability Rules</h3>
-            <p class="mb-3">Define when this template should be applied to records.</p>
-            <div id="rules-container">
-                <div class="rule-item mb-3">
-                    <div class="grid grid-4 gap-2">
-                        <select class="form-select" id="rule-field-1" onchange="app.updateFieldOptions(1)">
+            <div class="flex justify-between items-center mb-3">
+                <div>
+                    <h3>Applicability Rules</h3>
+                    <p class="text-muted">Define when this template should be applied to records.</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="app.showRulesHelp()">
+                    <span class="icon">ℹ️</span> Help
+                </button>
+            </div>
+
+            <div id="rules-container" class="rules-builder">
+                <!-- Initial rule -->
+                ${this.generateRuleHTML(1, fields, true)}
+            </div>
+
+            <div class="flex gap-2 mt-4">
+                <button class="btn btn-secondary" onclick="app.addRule()">
+                    <span style="margin-right: 5px;">+</span> Add Rule
+                </button>
+            </div>
+
+            <div class="mt-4 p-3 bg-secondary rounded border border-color">
+                <h4 class="text-sm font-bold mb-2">Logic Preview</h4>
+                <div id="rules-preview" class="text-muted text-sm font-mono">No rules defined yet</div>
+            </div>
+        `;
+    }
+
+    getFieldsForModule(module) {
+        const commonFields = [
+            { value: 'status', label: 'Status' },
+            { value: 'department', label: 'Department' },
+            { value: 'location', label: 'Location' }
+        ];
+
+        switch (module) {
+            case 'incidents':
+                return [
+                    { value: 'priority', label: 'Priority' },
+                    { value: 'severity', label: 'Severity' },
+                    { value: 'category', label: 'Category' },
+                    ...commonFields
+                ];
+            case 'work-permits':
+                return [
+                    { value: 'type', label: 'Permit Type' },
+                    { value: 'riskLevel', label: 'Risk Level' },
+                    ...commonFields
+                ];
+            case 'audits':
+                return [
+                    { value: 'findingType', label: 'Finding Type' },
+                    { value: 'riskRating', label: 'Risk Rating' },
+                    ...commonFields
+                ];
+            default:
+                return commonFields;
+        }
+    }
+
+    generateRuleHTML(index, fields, isFirst = false) {
+        const options = fields.map(f => `<option value="${f.value}">${f.label}</option>`).join('');
+
+        return `
+            <div class="rule-item card p-3 mb-3 relative" id="rule-row-${index}">
+                ${!isFirst ? `
+                    <div class="logic-connector" style="position: absolute; top: -25px; left: 20px; border-left: 2px solid var(--border-color); height: 25px;"></div>
+                    <div class="mb-3">
+                         <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold text-muted">Logical Operator:</span>
+                            <div class="btn-group">
+                                <input type="radio" class="btn-check" name="rule-logic-${index}" id="logic-and-${index}" value="AND" checked onchange="app.updateRulesPreview()">
+                                <label class="btn btn-outline-primary btn-sm" for="logic-and-${index}">AND</label>
+
+                                <input type="radio" class="btn-check" name="rule-logic-${index}" id="logic-or-${index}" value="OR" onchange="app.updateRulesPreview()">
+                                <label class="btn btn-outline-primary btn-sm" for="logic-or-${index}">OR</label>
+                            </div>
+                         </div>
+                    </div>
+                ` : ''}
+
+                <div class="grid grid-3 gap-3 items-end">
+                    <div class="form-group mb-0">
+                        <label class="form-label text-xs">Field <span class="text-info cursor-help" title="The field from the record to evaluate">ⓘ</span></label>
+                        <select class="form-select" id="rule-field-${index}" onchange="app.updateFieldOptions(${index}); app.updateRulesPreview()">
                             <option value="">Select field</option>
-                            <option value="priority">Priority</option>
-                            <option value="status">Status</option>
-                            <option value="department">Department</option>
-                            <option value="severity">Severity</option>
-                            <option value="location">Location</option>
+                            ${options}
                         </select>
-                        <select class="form-select" id="rule-operator-1">
+                    </div>
+
+                    <div class="form-group mb-0">
+                        <label class="form-label text-xs">Condition <span class="text-info cursor-help" title="How to compare the field value">ⓘ</span></label>
+                        <select class="form-select" id="rule-operator-${index}" onchange="app.updateRulesPreview()">
                             <option value="equals">Equals</option>
+                            <option value="notEquals">Does not equal</option>
                             <option value="contains">Contains</option>
                             <option value="greaterThan">Greater Than</option>
                             <option value="lessThan">Less Than</option>
+                            <option value="isEmpty">Is Empty</option>
+                            <option value="isNotEmpty">Is Not Empty</option>
                         </select>
-                        <input type="text" class="form-input" id="rule-value-1" placeholder="Value" list="rule-options-1">
-                        <datalist id="rule-options-1"></datalist>
-                        <select class="form-select" id="rule-logic-1">
-                            <option value="AND">AND</option>
-                            <option value="OR">OR</option>
-                        </select>
+                    </div>
+
+                    <div class="form-group mb-0 relative">
+                        <label class="form-label text-xs">Value <span class="text-info cursor-help" title="The value to compare against">ⓘ</span></label>
+                        <div class="flex gap-2">
+                            <input type="text" class="form-input" id="rule-value-${index}" placeholder="Value" list="rule-options-${index}" oninput="app.updateRulesPreview()">
+                            <datalist id="rule-options-${index}"></datalist>
+                            ${!isFirst ? `
+                                <button class="btn btn-danger btn-sm" onclick="app.removeRule(${index})" title="Remove Rule">✕</button>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="flex gap-2">
-                <button class="btn btn-secondary" onclick="app.addRule()">Add Rule</button>
-                <button class="btn btn-danger" onclick="app.removeLastRule()" id="remove-rule-btn" style="display: none;">Remove Last Rule</button>
-            </div>
-            <div class="mt-3">
-                <h4>Preview</h4>
-                <div id="rules-preview" class="text-muted">No rules defined yet</div>
-            </div>
         `;
+    }
+
+    showRulesHelp() {
+        this.uiManager.showModal('Rules Configuration Help', `
+            <div class="p-2">
+                <h4 class="mb-2">How to configure rules</h4>
+                <p class="mb-3">Rules determine which records this template applies to. A record must match the logic defined here to trigger this escalation.</p>
+
+                <h5 class="mb-1">Fields</h5>
+                <ul class="mb-3 ml-4">
+                    <li>Select a field from the module (e.g., Priority, Status)</li>
+                    <li>Fields are specific to the selected module</li>
+                </ul>
+
+                <h5 class="mb-1">Operators</h5>
+                <ul class="mb-3 ml-4">
+                    <li><strong>Equals:</strong> Exact match</li>
+                    <li><strong>Contains:</strong> Partial match (useful for text)</li>
+                    <li><strong>Greater/Less Than:</strong> For numbers or dates</li>
+                </ul>
+
+                <h5 class="mb-1">Logic</h5>
+                <ul class="ml-4">
+                    <li><strong>AND:</strong> Both conditions must be true</li>
+                    <li><strong>OR:</strong> At least one condition must be true</li>
+                </ul>
+            </div>
+        `);
     }
 
     async updateFieldOptions(ruleIndex) {
@@ -1329,7 +1594,8 @@ class EscalationMatrixApp {
 
             // Also add some known defaults based on field name if record data is sparse
             if (field === 'priority') ['Critical', 'High', 'Medium', 'Low'].forEach(v => values.add(v));
-            if (field === 'status') ['Open', 'In Progress', 'Resolved', 'Closed'].forEach(v => values.add(v));
+            if (field === 'status') ['Open', 'In Progress', 'Resolved', 'Closed', 'Overdue'].forEach(v => values.add(v));
+            if (field === 'severity') ['High', 'Medium', 'Low'].forEach(v => values.add(v));
 
             dataList.innerHTML = Array.from(values).sort().map(val => `<option value="${sanitizeHTML(val)}">`).join('');
         } else {
@@ -1339,71 +1605,338 @@ class EscalationMatrixApp {
 
     renderWizardStep3() {
         return `
-            <h3>Escalation Hierarchy</h3>
-            <p class="mb-3">Define the escalation levels and recipients.</p>
-            <div id="hierarchy-container">
-                <div class="hierarchy-level mb-3">
-                    <h4>Level 1</h4>
-                    <div class="grid grid-2 gap-2">
-                        <select class="form-select">
-                            <option value="">Select role</option>
-                            <option value="direct-manager">Direct Manager</option>
-                            <option value="department-head">Department Head</option>
-                            <option value="site-manager">Site Manager</option>
-                        </select>
-                        <input type="email" class="form-input" placeholder="Fallback email">
-                    </div>
+            <div class="flex justify-between items-center mb-3">
+                <div>
+                    <h3>Escalation Hierarchy</h3>
+                    <p class="text-muted">Define the path of escalation, recipients, and conditions.</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="app.showHierarchyHelp()">
+                    <span class="icon">ℹ️</span> Help
+                </button>
+            </div>
+
+            <div class="mb-4 p-3 bg-secondary rounded border border-color">
+                <h4 class="text-sm font-bold mb-2">Watchers (CC Recipients)</h4>
+                <div id="watchers-container" class="flex flex-wrap gap-2 items-center">
+                     <div class="flex gap-2 w-full">
+                        <input type="text" id="watcher-input" class="form-input" placeholder="Add email or select user..." list="user-list">
+                        <datalist id="user-list"></datalist>
+                        <button class="btn btn-secondary" onclick="app.addWatcher()">Add</button>
+                     </div>
+                     <div id="active-watchers" class="flex flex-wrap gap-2 mt-2 w-full">
+                         <!-- Watcher tags go here -->
+                     </div>
                 </div>
             </div>
-            <button class="btn btn-secondary" onclick="app.addHierarchyLevel()">Add Level</button>
+
+            <div id="hierarchy-container" class="hierarchy-builder">
+                <!-- Levels will be injected here -->
+            </div>
+
+            <button class="btn btn-secondary w-full mt-3" onclick="app.addHierarchyLevel()">
+                <span class="text-lg">+</span> Add Next Level
+            </button>
         `;
     }
 
-    renderWizardStep4() {
+    async renderHierarchyLevel(levelIndex) {
+        // Fetch users for the dropdown
+        if (!this.usersList) {
+            // Mock fetching users if not already loaded
+            this.usersList = [
+                { id: 'user-1', name: 'John Doe', role: 'Direct Manager' },
+                { id: 'user-2', name: 'Jane Smith', role: 'Department Head' },
+                { id: 'user-3', name: 'Bob Johnson', role: 'Site Manager' }
+            ];
+             // Try to get real users if available
+             try {
+                 const users = await this.dataManager.getUsersByRole(''); // get all
+                 if(users && users.length > 0) this.usersList = users;
+             } catch(e) {}
+        }
+
+        const userOptions = this.usersList.map(u => `<option value="${u.id}">${u.name} (${u.role})</option>`).join('');
+
         return `
-            <h3>Trigger Configuration</h3>
-            <p class="mb-3">Define when escalations should be triggered.</p>
-            <div id="triggers-container">
-                <div class="trigger-item mb-3">
-                    <div class="grid grid-3 gap-2">
-                        <select class="form-select">
-                            <option value="time-based">Time-based</option>
-                            <option value="event-based">Event-based</option>
-                        </select>
-                        <select class="form-select">
-                            <option value="1">Level 1</option>
-                            <option value="2">Level 2</option>
-                            <option value="3">Level 3</option>
-                        </select>
-                        <input type="text" class="form-input" id="trigger-config-1" placeholder="Configuration">
+            <div class="hierarchy-level card p-3 mb-3 relative" id="level-row-${levelIndex}">
+                <div class="level-header flex justify-between items-center mb-3">
+                    <h4 class="font-bold text-primary">Level ${levelIndex}</h4>
+                    <div class="flex gap-2">
+                         ${levelIndex > 1 ? `
+                            <button class="btn btn-secondary btn-sm" onclick="app.moveLevelUp(${levelIndex})" title="Move Up">↑</button>
+                         ` : ''}
+                         <button class="btn btn-secondary btn-sm" onclick="app.moveLevelDown(${levelIndex})" title="Move Down">↓</button>
+                         <button class="btn btn-danger btn-sm" onclick="app.removeLevel(${levelIndex})" title="Remove Level">✕</button>
                     </div>
-                    <div class="mt-2">
-                         <label class="form-label text-sm">Schedule Context (REQ-016)</label>
-                         <select class="form-select text-sm" id="trigger-schedule-1" style="width: auto; display: inline-block;">
-                             <option value="24/7">24/7 (Always Send)</option>
-                             <option value="business-hours">Business Hours Only (Mon-Fri 9-5)</option>
-                         </select>
+                </div>
+
+                <div class="grid grid-2 gap-3 mb-3">
+                     <div class="form-group mb-0">
+                        <label class="form-label text-xs">Escalate After</label>
+                        <div class="flex gap-2">
+                            <input type="number" class="form-input" id="level-time-${levelIndex}" value="${levelIndex === 1 ? 0 : 24}" min="0">
+                            <select class="form-select" id="level-unit-${levelIndex}">
+                                <option value="minutes">Minutes</option>
+                                <option value="hours" selected>Hours</option>
+                                <option value="days">Days</option>
+                            </select>
+                        </div>
+                     </div>
+                     <div class="form-group mb-0">
+                        <label class="form-label text-xs">Condition (Optional)</label>
+                        <select class="form-select" id="level-condition-${levelIndex}">
+                            <option value="">Always escalate</option>
+                            <option value="no-response">No response</option>
+                            <option value="status-unchanged">Status unchanged</option>
+                        </select>
+                     </div>
+                </div>
+
+                <div class="form-group mb-0">
+                    <label class="form-label text-xs">Recipients (Users)</label>
+                    <select class="form-select" id="level-recipients-${levelIndex}" multiple size="3">
+                        ${userOptions}
+                    </select>
+                    <p class="text-xs text-muted mt-1">Hold Ctrl/Cmd to select multiple users</p>
+                </div>
+            </div>
+        `;
+    }
+
+    async refreshHierarchy() {
+        const container = document.getElementById('hierarchy-container');
+        if (!container) return;
+
+        // If it's the first load or reset
+        if (container.children.length === 0) {
+            container.innerHTML = await this.renderHierarchyLevel(1);
+        }
+    }
+
+    addWatcher() {
+        const input = document.getElementById('watcher-input');
+        const container = document.getElementById('active-watchers');
+        const val = input.value.trim();
+
+        if (val) {
+            const watcher = document.createElement('span');
+            watcher.className = 'badge badge-info flex items-center gap-1';
+            watcher.innerHTML = `
+                ${sanitizeHTML(val)}
+                <span class="cursor-pointer ml-1 font-bold" onclick="this.parentElement.remove()">×</span>
+            `;
+            container.appendChild(watcher);
+            input.value = '';
+        }
+    }
+
+    renderWizardStep4() {
+        const module = document.getElementById('template-module')?.value || 'incidents';
+
+        return `
+            <div class="flex justify-between items-center mb-3">
+                <div>
+                    <h3>Trigger Configuration</h3>
+                    <p class="text-muted">Define events or time conditions that trigger escalations.</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="app.showTriggerHelp()">
+                    <span class="icon">ℹ️</span> Help
+                </button>
+            </div>
+
+            <div id="triggers-container" class="triggers-builder">
+                ${this.generateTriggerHTML(1, module)}
+            </div>
+
+            <button class="btn btn-secondary mt-3" onclick="app.addTrigger()">
+                <span class="text-lg">+</span> Add Trigger
+            </button>
+        `;
+    }
+
+    generateTriggerHTML(index, module) {
+        // Dynamic fields based on module
+        let dateFields = [];
+        let eventFields = [];
+
+        if (module === 'incidents') {
+            dateFields = ['Created Date', 'Last Updated', 'Due Date', 'Resolution Target'];
+            eventFields = ['Status Change', 'Priority Change', 'Assignment Change', 'Comment Added'];
+        } else if (module === 'work-permits') {
+            dateFields = ['Expiration Date', 'Start Date', 'Extension Date'];
+            eventFields = ['Status Change', 'Extension Requested', 'Suspension'];
+        } else {
+            dateFields = ['Due Date', 'Follow-up Date', 'Closure Date'];
+            eventFields = ['Status Change', 'Finding Verified', 'Action Plan Submitted'];
+        }
+
+        const dateOptions = dateFields.map(f => `<option value="${f}">${f}</option>`).join('');
+        const eventOptions = eventFields.map(f => `<option value="${f}">${f}</option>`).join('');
+
+        return `
+            <div class="trigger-item card p-3 mb-3 relative" id="trigger-row-${index}">
+                 <div class="trigger-header flex justify-between items-center mb-3 border-b border-color pb-2">
+                    <h4 class="font-bold text-sm">Trigger ${index}</h4>
+                    ${index > 1 ? `<button class="btn btn-danger btn-sm" onclick="app.removeTrigger(${index})">✕</button>` : ''}
+                </div>
+
+                <div class="grid grid-2 gap-3 mb-3">
+                    <div class="form-group mb-0">
+                        <label class="form-label text-xs">Trigger Type</label>
+                        <select class="form-select" id="trigger-type-${index}" onchange="app.toggleTriggerConfig(${index})">
+                            <option value="time-based">Time Based</option>
+                            <option value="event-based">Event Based</option>
+                        </select>
+                    </div>
+                    <div class="form-group mb-0">
+                        <label class="form-label text-xs">Trigger Level</label>
+                         <select class="form-select" id="trigger-level-${index}">
+                            <option value="1">Level 1 (Initial)</option>
+                            <option value="2">Level 2 (Escalation)</option>
+                            <option value="3">Level 3 (Senior Mgmt)</option>
+                            <option value="4">Level 4 (Executive)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Time Based Config -->
+                <div id="trigger-time-config-${index}">
+                    <div class="grid grid-3 gap-2 items-end">
+                        <div class="form-group mb-0">
+                             <label class="form-label text-xs">When?</label>
+                             <div class="flex gap-1">
+                                <input type="number" class="form-input" placeholder="0" style="width: 60px;">
+                                <select class="form-select">
+                                    <option value="hours">Hours</option>
+                                    <option value="days">Days</option>
+                                    <option value="weeks">Weeks</option>
+                                </select>
+                             </div>
+                        </div>
+                        <div class="form-group mb-0">
+                            <select class="form-select">
+                                <option value="before">Before</option>
+                                <option value="after">After</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-0">
+                             <label class="form-label text-xs">Date Field</label>
+                             <select class="form-select">
+                                ${dateOptions}
+                             </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Event Based Config -->
+                <div id="trigger-event-config-${index}" class="hidden">
+                    <div class="grid grid-2 gap-3">
+                         <div class="form-group mb-0">
+                            <label class="form-label text-xs">Event</label>
+                            <select class="form-select" onchange="app.toggleEventDetails(${index}, this.value)">
+                                ${eventOptions}
+                            </select>
+                         </div>
+                         <!-- Dynamic event details could appear here -->
+                         <div id="trigger-event-details-${index}" class="form-group mb-0 hidden">
+                             <label class="form-label text-xs">Status becomes:</label>
+                             <select class="form-select">
+                                 <option value="Critical">Critical</option>
+                                 <option value="Overdue">Overdue</option>
+                                 <option value="Closed">Closed</option>
+                             </select>
+                         </div>
                     </div>
                 </div>
             </div>
-            <button class="btn btn-secondary" onclick="app.addTrigger()">Add Trigger</button>
         `;
+    }
+
+    toggleTriggerConfig(index) {
+        const type = document.getElementById(`trigger-type-${index}`).value;
+        const timeConfig = document.getElementById(`trigger-time-config-${index}`);
+        const eventConfig = document.getElementById(`trigger-event-config-${index}`);
+
+        if (type === 'time-based') {
+            timeConfig.classList.remove('hidden');
+            eventConfig.classList.add('hidden');
+        } else {
+            timeConfig.classList.add('hidden');
+            eventConfig.classList.remove('hidden');
+        }
+    }
+
+    toggleEventDetails(index, eventType) {
+        const details = document.getElementById(`trigger-event-details-${index}`);
+        if (eventType === 'Status Change' || eventType === 'Priority Change') {
+            details.classList.remove('hidden');
+            // Logic to update dropdown options based on event type would go here
+        } else {
+            details.classList.add('hidden');
+        }
+    }
+
+    showTriggerHelp() {
+        this.uiManager.showModal('Trigger Configuration', `
+            <div class="p-2">
+                 <p>Triggers initiate the escalation process.</p>
+                 <ul>
+                    <li><strong>Time Based:</strong> Triggers relative to a date field (e.g., 2 days before Due Date).</li>
+                    <li><strong>Event Based:</strong> Triggers when a specific action occurs (e.g., Status changes to Critical).</li>
+                 </ul>
+            </div>
+        `);
     }
 
     renderWizardStep5() {
         return `
-            <h3>Notification Templates</h3>
-            <p class="mb-3">Configure email and SMS notification content.</p>
-            <div class="grid grid-2 gap-3">
+            <div class="flex justify-between items-center mb-3">
                 <div>
-                    <h4>Email Template</h4>
-                    <div class="form-group">
-                        <label class="form-label" for="email-subject">Subject</label>
-                        <input type="text" id="email-subject" class="form-input" placeholder="Email subject with {{field}} placeholders" value="ESCALATION: {{id}} - {{location}}">
+                    <h3>Review & Preview</h3>
+                    <p class="text-muted">Review your configuration and preview notifications.</p>
+                </div>
+            </div>
+
+            <!-- Configuration Summary -->
+            <div class="mb-4">
+                <div class="card mb-2">
+                    <div class="card-header flex justify-between items-center cursor-pointer" onclick="app.toggleSummarySection('summary-basics')">
+                        <h4 class="text-sm font-bold">1. Basic Information</h4>
+                        <span>▼</span>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label" for="email-body">Body</label>
-                        <textarea id="email-body" class="form-textarea" rows="8" placeholder="Email body with {{field}} placeholders">Dear {{recipientName}},
+                    <div id="summary-basics" class="p-3 hidden">
+                        <div class="grid grid-2">
+                            <div><strong>Name:</strong> <span id="summary-name">Loading...</span></div>
+                            <div><strong>Module:</strong> <span id="summary-module">Loading...</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-2">
+                    <div class="card-header flex justify-between items-center cursor-pointer" onclick="app.toggleSummarySection('summary-rules')">
+                        <h4 class="text-sm font-bold">2. Applicability Rules</h4>
+                        <span>▼</span>
+                    </div>
+                    <div id="summary-rules" class="p-3 hidden">
+                         <div id="summary-rules-content">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Email Editor & Preview -->
+            <div class="grid grid-2 gap-4">
+                <!-- Editor -->
+                <div>
+                    <h4 class="mb-2">Email Configuration</h4>
+                    <div class="card p-3">
+                        <div class="form-group">
+                            <label class="form-label" for="email-subject">Subject</label>
+                            <input type="text" id="email-subject" class="form-input" placeholder="Email subject" value="ESCALATION: {{id}} - {{location}}" oninput="app.updateEmailPreviewRender()">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="email-body">Body</label>
+                            <textarea id="email-body" class="form-textarea" rows="10" placeholder="Email body" oninput="app.updateEmailPreviewRender()">Dear {{recipientName}},
 
 An item requires your attention:
 
@@ -1417,29 +1950,123 @@ Please review and take appropriate action.
 View Details: {{actionUrl}}
 
 This is an automated escalation notification.</textarea>
+                        </div>
+
+                         <div class="mt-3">
+                            <h5 class="text-sm font-bold mb-1">Available Placeholders</h5>
+                            <div class="text-xs text-muted">
+                                {{id}}, {{description}}, {{priority}}, {{status}}, {{location}}, {{department}}, {{recipientName}}
+                            </div>
+                        </div>
+                    </div>
+
+                    <h4 class="mb-2 mt-4">SMS Configuration</h4>
+                    <div class="card p-3">
+                         <div class="form-group">
+                            <label class="form-label" for="sms-body">Message</label>
+                            <textarea id="sms-body" class="form-textarea" rows="3" maxlength="160" oninput="app.updateSMSCharCount()">ESCALATION: {{id}} at {{location}}. Priority: {{priority}}. View: {{actionUrl}}</textarea>
+                            <div class="text-right text-xs text-muted mt-1">
+                                <span id="sms-char-count">0</span>/160
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Preview -->
                 <div>
-                    <h4>SMS Template</h4>
-                    <div class="form-group">
-                        <label class="form-label" for="sms-body">Message (160 chars max)</label>
-                        <textarea id="sms-body" class="form-textarea" rows="4" placeholder="SMS message with {{field}} placeholders" maxlength="160">ESCALATION: {{id}} at {{location}}. Priority: {{priority}}. View: {{actionUrl}}</textarea>
+                    <h4 class="mb-2">Live Preview</h4>
+                    <div class="card p-0 overflow-hidden">
+                        <div class="bg-tertiary p-2 border-b border-color flex justify-between items-center">
+                            <span class="text-sm font-bold">Desktop Email Preview</span>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline-primary active" onclick="app.setPreviewMode('html')">HTML</button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="app.setPreviewMode('text')">Text</button>
+                            </div>
+                        </div>
+                        <div class="p-4 bg-white" style="min-height: 400px;">
+                            <div class="border-b border-color pb-2 mb-3">
+                                <div class="text-sm"><strong>To:</strong> <span class="text-muted">John Doe (Direct Manager)</span></div>
+                                <div class="text-sm"><strong>Subject:</strong> <span id="preview-subject">Loading...</span></div>
+                            </div>
+                            <div id="preview-body" class="text-sm" style="white-space: pre-wrap;">
+                                Loading...
+                            </div>
+                             <div class="mt-4 pt-3 border-t border-color" id="preview-signature">
+                                <!-- Signature will go here -->
+                                <div class="text-muted text-xs">
+                                    --<br>
+                                    Safety Management System<br>
+                                    <a href="#">Support</a> | <a href="#">Unsubscribe</a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mt-2">
-                        <small class="text-muted">Characters: <span id="sms-char-count">0</span>/160</small>
-                    </div>
-                </div>
-            </div>
-            <div class="mt-4">
-                <h4>Available Placeholders</h4>
-                <div class="text-sm text-muted">
-                    <strong>Common:</strong> {{id}}, {{description}}, {{priority}}, {{status}}, {{location}}, {{department}}, {{recipientName}}<br>
-                    <strong>Incident specific:</strong> {{reportedBy}}, {{createdDate}}<br>
-                    <strong>Permit specific:</strong> {{issuedTo}}, {{expirationDate}}<br>
-                    <strong>Audit specific:</strong> {{assignedTo}}, {{dueDate}}, {{severity}}
                 </div>
             </div>
         `;
+    }
+
+    toggleSummarySection(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden');
+
+        // Populate if opening
+        if (!el.classList.contains('hidden')) {
+            if (id === 'summary-basics') {
+                document.getElementById('summary-name').textContent = document.getElementById('template-name').value || '(Untitled)';
+                document.getElementById('summary-module').textContent = document.getElementById('template-module').value || '(None)';
+            } else if (id === 'summary-rules') {
+                const rulesPreview = document.getElementById('rules-preview');
+                document.getElementById('summary-rules-content').innerHTML = rulesPreview ? rulesPreview.innerHTML : 'No rules';
+            }
+        }
+    }
+
+    updateEmailPreviewRender() {
+        const subjectInput = document.getElementById('email-subject');
+        const bodyInput = document.getElementById('email-body');
+        const previewSubject = document.getElementById('preview-subject');
+        const previewBody = document.getElementById('preview-body');
+
+        if (!subjectInput || !bodyInput) return;
+
+        // Mock data for preview
+        const mockData = {
+            id: 'INC-2025-001',
+            description: 'Chemical spill in Lab 3',
+            priority: 'High',
+            location: 'Building A, Lab 3',
+            recipientName: 'John Doe',
+            status: 'Open',
+            department: 'Chemistry',
+            actionUrl: 'http://system/inc/001'
+        };
+
+        let subject = subjectInput.value;
+        let body = bodyInput.value;
+
+        // Replace placeholders
+        Object.keys(mockData).forEach(key => {
+            const regex = new RegExp(`{{${key}}}`, 'g');
+            subject = subject.replace(regex, mockData[key]);
+            body = body.replace(regex, mockData[key]);
+        });
+
+        previewSubject.textContent = subject;
+
+        if (this.previewMode === 'html') {
+             // Simple HTML rendering (convert newlines to br for basic preview)
+             // In a real editor this would be more complex
+             previewBody.innerHTML = body.replace(/\n/g, '<br>');
+        } else {
+             previewBody.textContent = body;
+        }
+    }
+
+    setPreviewMode(mode) {
+        this.previewMode = mode || 'html';
+        // Toggle active class on buttons? (Simplified for now)
+        this.updateEmailPreviewRender();
     }
 
     startEscalationSimulation() {
@@ -1562,132 +2189,119 @@ This is an automated escalation notification.</textarea>
 
     addRule() {
         const rulesContainer = document.getElementById('rules-container');
-        const ruleCount = rulesContainer.children.length + 1;
+        // Find max ID to avoid conflicts
+        let maxId = 0;
+        rulesContainer.querySelectorAll('[id^="rule-row-"]').forEach(el => {
+             const id = parseInt(el.id.replace('rule-row-', ''));
+             if (id > maxId) maxId = id;
+        });
+        const ruleCount = maxId + 1;
 
-        const ruleDiv = document.createElement('div');
-        ruleDiv.className = 'rule-item mb-3';
-        ruleDiv.innerHTML = `
-            <div class="grid grid-4 gap-2">
-                <select class="form-select" id="rule-field-${ruleCount}" onchange="app.updateFieldOptions(${ruleCount})">
-                    <option value="">Select field</option>
-                    <option value="priority">Priority</option>
-                    <option value="status">Status</option>
-                    <option value="department">Department</option>
-                    <option value="severity">Severity</option>
-                    <option value="location">Location</option>
-                </select>
-                <select class="form-select" id="rule-operator-${ruleCount}">
-                    <option value="equals">Equals</option>
-                    <option value="contains">Contains</option>
-                    <option value="greaterThan">Greater Than</option>
-                    <option value="lessThan">Less Than</option>
-                </select>
-                <input type="text" class="form-input" id="rule-value-${ruleCount}" placeholder="Value" list="rule-options-${ruleCount}">
-                <datalist id="rule-options-${ruleCount}"></datalist>
-                <select class="form-select" id="rule-logic-${ruleCount}">
-                    <option value="AND">AND</option>
-                    <option value="OR">OR</option>
-                </select>
-            </div>
-        `;
+        const module = document.getElementById('template-module')?.value || 'incidents';
+        const fields = this.getFieldsForModule(module);
 
-        rulesContainer.appendChild(ruleDiv);
-        document.getElementById('remove-rule-btn').style.display = 'inline-block';
+        const ruleHTML = this.generateRuleHTML(ruleCount, fields, false);
+        rulesContainer.insertAdjacentHTML('beforeend', ruleHTML);
         this.updateRulesPreview();
     }
 
-    removeLastRule() {
-        const rulesContainer = document.getElementById('rules-container');
-        if (rulesContainer.children.length > 1) {
-            rulesContainer.removeChild(rulesContainer.lastElementChild);
+    removeRule(index) {
+        const ruleRow = document.getElementById(`rule-row-${index}`);
+        if (ruleRow) {
+            ruleRow.remove();
+            this.updateRulesPreview();
         }
-
-        if (rulesContainer.children.length === 1) {
-            document.getElementById('remove-rule-btn').style.display = 'none';
-        }
-
-        this.updateRulesPreview();
     }
 
     updateRulesPreview() {
         const rulesContainer = document.getElementById('rules-container');
         const preview = document.getElementById('rules-preview');
-        const rules = [];
 
-        for (let i = 1; i <= rulesContainer.children.length; i++) {
-            const field = document.getElementById(`rule-field-${i}`)?.value;
-            const operator = document.getElementById(`rule-operator-${i}`)?.value;
-            const value = document.getElementById(`rule-value-${i}`)?.value;
-            const logic = document.getElementById(`rule-logic-${i}`)?.value;
+        let previewText = '';
+        const ruleRows = rulesContainer.querySelectorAll('.rule-item');
 
-            if (field && operator && value) {
-                rules.push(`${field} ${operator} "${value}"`);
-            }
-        }
-
-        if (rules.length === 0) {
+        if (ruleRows.length === 0) {
             preview.textContent = 'No rules defined yet';
-            preview.className = 'text-muted';
-        } else {
-            preview.textContent = rules.join(' AND ');
-            preview.className = '';
+            return;
         }
+
+        ruleRows.forEach((row, index) => {
+            const id = row.id.replace('rule-row-', '');
+
+            // Get values
+            const fieldSelect = document.getElementById(`rule-field-${id}`);
+            const operatorSelect = document.getElementById(`rule-operator-${id}`);
+            const valueInput = document.getElementById(`rule-value-${id}`);
+
+            const fieldText = fieldSelect?.options[fieldSelect.selectedIndex]?.text || 'Field';
+            const operatorText = operatorSelect?.options[operatorSelect.selectedIndex]?.text || 'Equals';
+            const value = valueInput?.value || 'Value';
+
+            // Logic
+            let logic = '';
+            if (index > 0) {
+                 const logicAnd = document.getElementById(`logic-and-${id}`);
+                 const logicOr = document.getElementById(`logic-or-${id}`);
+                 if (logicAnd?.checked) logic = ' <span class="badge badge-info text-xs">AND</span> ';
+                 else if (logicOr?.checked) logic = ' <span class="badge badge-warning text-xs">OR</span> ';
+            }
+
+            previewText += `${logic}<strong>${fieldText}</strong> ${operatorText.toLowerCase()} "<strong>${value}</strong>"`;
+        });
+
+        preview.innerHTML = previewText;
     }
 
-    addHierarchyLevel() {
+    async addHierarchyLevel() {
         const hierarchyContainer = document.getElementById('hierarchy-container');
-        const levelCount = hierarchyContainer.children.length + 1;
+        // Find current max level
+        let maxLevel = 0;
+        hierarchyContainer.querySelectorAll('[id^="level-row-"]').forEach(el => {
+             const id = parseInt(el.id.replace('level-row-', ''));
+             if (id > maxLevel) maxLevel = id;
+        });
 
-        const levelDiv = document.createElement('div');
-        levelDiv.className = 'hierarchy-level mb-3';
-        levelDiv.innerHTML = `
-            <h4>Level ${levelCount}</h4>
-            <div class="grid grid-2 gap-2">
-                <select class="form-select" id="hierarchy-roles-${levelCount}">
-                    <option value="">Select role</option>
-                    <option value="direct-manager">Direct Manager</option>
-                    <option value="department-head">Department Head</option>
-                    <option value="site-manager">Site Manager</option>
-                    <option value="general-manager">General Manager</option>
-                    <option value="executive">Executive</option>
-                </select>
-                <input type="email" class="form-input" id="hierarchy-fallback-${levelCount}" placeholder="Fallback email">
+        const newLevelHTML = await this.renderHierarchyLevel(maxLevel + 1);
+        hierarchyContainer.insertAdjacentHTML('beforeend', newLevelHTML);
+    }
+
+    removeLevel(levelIndex) {
+        const row = document.getElementById(`level-row-${levelIndex}`);
+        if (row) row.remove();
+        // Re-index remaining levels? Maybe not strictly necessary for prototype but good for UX
+    }
+
+    showHierarchyHelp() {
+        this.uiManager.showModal('Hierarchy Configuration', `
+            <div class="p-2">
+                <p>Define who gets notified and when.</p>
+                <ul>
+                    <li><strong>Level 1:</strong> Initial notification recipients.</li>
+                    <li><strong>Escalate After:</strong> Time to wait before triggering this level.</li>
+                    <li><strong>Watchers:</strong> Users who receive a CC of all notifications but are not expected to take action.</li>
+                </ul>
             </div>
-        `;
-
-        hierarchyContainer.appendChild(levelDiv);
+        `);
     }
 
     addTrigger() {
         const triggersContainer = document.getElementById('triggers-container');
-        const triggerCount = triggersContainer.children.length + 1;
+        // Find current max id
+        let maxId = 0;
+        triggersContainer.querySelectorAll('[id^="trigger-row-"]').forEach(el => {
+             const id = parseInt(el.id.replace('trigger-row-', ''));
+             if (id > maxId) maxId = id;
+        });
+        const triggerCount = maxId + 1;
 
-        const triggerDiv = document.createElement('div');
-        triggerDiv.className = 'trigger-item mb-3';
-        triggerDiv.innerHTML = `
-            <div class="grid grid-3 gap-2">
-                <select class="form-select" id="trigger-type-${triggerCount}">
-                    <option value="time-based">Time-based</option>
-                    <option value="event-based">Event-based</option>
-                </select>
-                <select class="form-select" id="trigger-level-${triggerCount}">
-                    <option value="1">Level 1</option>
-                    <option value="2">Level 2</option>
-                    <option value="3">Level 3</option>
-                    <option value="4">Level 4</option>
-                </select>
-                <input type="text" class="form-input" id="trigger-config-${triggerCount}" placeholder="Configuration">
-            </div>
-            <div class="mt-2">
-                 <label class="form-label text-sm">Schedule Context (REQ-016)</label>
-                 <select class="form-select text-sm" id="trigger-schedule-${triggerCount}" style="width: auto; display: inline-block;">
-                     <option value="24/7">24/7 (Always Send)</option>
-                     <option value="business-hours">Business Hours Only (Mon-Fri 9-5)</option>
-                 </select>
-            </div>
-        `;
+        const module = document.getElementById('template-module')?.value || 'incidents';
+        const triggerHTML = this.generateTriggerHTML(triggerCount, module);
+        triggersContainer.insertAdjacentHTML('beforeend', triggerHTML);
+    }
 
-        triggersContainer.appendChild(triggerDiv);
+    removeTrigger(index) {
+        const row = document.getElementById(`trigger-row-${index}`);
+        if (row) row.remove();
     }
 
     showToast(message, type = 'info') {

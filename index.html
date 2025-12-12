@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Escalation Matrix System</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --background: #f8fafc;
+            --surface: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --radius: 0.5rem;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- Sidebar Navigation --- */
+        .sidebar {
+            width: 260px;
+            background-color: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            transition: transform 0.3s ease;
+            z-index: 50;
+        }
+
+        .logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .nav-links {
+            list-style: none;
+            flex: 1;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            text-decoration: none;
+            color: var(--text-muted);
+            border-radius: var(--radius);
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background-color: #eff6ff;
+            color: var(--primary);
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .user-info h4 {
+            font-size: 0.875rem;
+        }
+
+        .user-info p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* --- Main Content --- */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1.25rem;
+            border-radius: var(--radius);
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            border-color: var(--border);
+            color: var(--text-main);
+        }
+
+        .btn-outline:hover {
+            background-color: var(--background);
+        }
+
+        /* --- Dashboard --- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .stat-trend {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        .trend-up { color: var(--success); }
+        .trend-down { color: var(--danger); }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-card {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+        }
+
+        .chart-header {
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+
+        /* CSS Simple Bar Chart */
+        .bar-chart {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 200px;
+            padding-top: 1rem;
+        }
+
+        .bar-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            width: 100%;
+        }
+
+        .bar {
+            width: 40px;
+            background-color: var(--primary);
+            border-radius: 4px 4px 0 0;
+            transition: height 0.5s ease;
+            position: relative;
+        }
+        
+        .bar:hover::after {
+            content: attr(data-value);
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--text-main);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+
+        .bar-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* --- Template Wizard --- */
+        .wizard-container {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 140px);
+        }
+
+        .wizard-steps {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            padding: 1rem;
+            background: #f8fafc;
+        }
+
+        .step-item {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            padding-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .step-item.active {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .step-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1rem; /* Adjust for padding */
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: var(--primary);
+        }
+
+        .wizard-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .wizard-footer {
+            padding: 1rem 2rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 0.625rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+        }
+        
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: 2px solid var(--primary);
+            border-color: var(--primary);
+        }
+
+        /* Rule Builder */
+        .rule-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            align-items: center;
+        }
+
+        /* Notification Preview - Mobile Responsive Simulation */
+        .preview-wrapper {
+            background: #333;
+            padding: 2rem;
+            border-radius: var(--radius);
+            display: flex;
+            justify-content: center;
+        }
+
+        .mobile-frame {
+            width: 375px;
+            height: 600px;
+            background: white;
+            border-radius: 2rem;
+            border: 8px solid #1a1a1a;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mobile-header {
+            background: #f1f5f9;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .mobile-body {
+            padding: 1.5rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .action-btn {
+            display: block;
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--primary);
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 1.5rem;
+            font-weight: 500;
+        }
+
+        /* --- Gamification --- */
+        .gamification-header {
+            background: linear-gradient(135deg, var(--primary), #4f46e5);
+            color: white;
+            padding: 2rem;
+            border-radius: var(--radius);
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .level-badge {
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+        }
+
+        .badges-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .badge-card {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: var(--radius);
+            text-align: center;
+            border: 1px solid var(--border);
+            transition: transform 0.2s;
+        }
+        
+        .badge-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .badge-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .badge-card.locked {
+            opacity: 0.5;
+            filter: grayscale(1);
+        }
+
+        /* --- Utilities --- */
+        .hidden { display: none !important; }
+        
+        .notification-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            border-left: 4px solid var(--primary);
+            padding: 1rem;
+            border-radius: 4px;
+            box-shadow: var(--shadow-md);
+            transform: translateY(100px);
+            transition: transform 0.3s ease;
+            z-index: 100;
+            max-width: 300px;
+        }
+        
+        .notification-toast.show {
+            transform: translateY(0);
+        }
+
+        /* Mobile Menu */
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: -100%;
+                height: 100%;
+                box-shadow: var(--shadow-md);
+            }
+            .sidebar.active {
+                left: 0;
+            }
+            .menu-toggle {
+                display: block;
+            }
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+            .preview-wrapper {
+                padding: 1rem;
+            }
+            .mobile-frame {
+                width: 100%;
+                height: 500px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span>EscalatePRO</span>
+        </div>
+        <ul class="nav-links">
+            <li class="nav-item">
+                <a href="#" class="nav-link active" data-view="dashboard">
+                    <span>📊</span> Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-view="templates">
+                    <span>⚙️</span> Templates
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-view="notifications">
+                    <span>🔔</span> Notifications <span id="notif-badge" style="background:var(--danger); color:white; font-size:0.7rem; padding:2px 6px; border-radius:10px; margin-left:auto;">3</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#" class="nav-link" data-view="gamification">
+                    <span>🏆</span> Gamification
+                </a>
+            </li>
+        </ul>
+        <div class="user-profile">
+            <div class="avatar">SC</div>
+            <div class="user-info">
+                <h4>Sarah Connor</h4>
+                <p>Safety Coordinator</p>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="header">
+            <div style="display:flex; align-items:center; gap:1rem;">
+                <button class="menu-toggle" id="menuToggle">☰</button>
+                <h1 class="page-title" id="pageTitle">Dashboard</h1>
+            </div>
+            <div>
+                <button class="btn btn-primary" id="quickCreateBtn">+ New Escalation</button>
+            </div>
+        </header>
+
+        <!-- View: Dashboard -->
+        <div id="view-dashboard" class="view-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Active Escalations</div>
+                    <div class="stat-value">24</div>
+                    <div class="stat-trend trend-down">
+                        <span>↓ 12%</span> vs last week
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">On-Time Completion</div>
+                    <div class="stat-value">92%</div>
+                    <div class="stat-trend trend-up">
+                        <span>↑ 5%</span> vs target
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Pending Reviews</div>
+                    <div class="stat-value">8</div>
+                    <div class="stat-trend trend-up">
+                        <span>↑ 2</span> new today
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Compliance Score</div>
+                    <div class="stat-value">98/100</div>
+                    <div class="stat-trend trend-up">
+                        <span>★</span> Top Tier
+                    </div>
+                </div>
+            </div>
+
+            <div class="charts-container">
+                <div class="chart-card">
+                    <div class="chart-header">Escalations by Module</div>
+                    <div class="bar-chart" id="dashboardChart">
+                        <!-- Bars injected by JS -->
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">Recent Triggers</div>
+                    <ul id="recentActivityList" style="list-style:none; font-size:0.875rem;">
+                        <!-- Items injected by JS -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Template Wizard -->
+        <div id="view-templates" class="view-section hidden">
+            <div class="wizard-container">
+                <div class="wizard-steps">
+                    <div class="step-item active" data-step="1">1. Basics</div>
+                    <div class="step-item" data-step="2">2. Rules</div>
+                    <div class="step-item" data-step="3">3. Hierarchy</div>
+                    <div class="step-item" data-step="4">4. Triggers</div>
+                    <div class="step-item" data-step="5">5. Preview</div>
+                </div>
+                
+                <div class="wizard-content">
+                    <!-- Step 1 -->
+                    <div class="step-content" id="step-1">
+                        <div class="form-group">
+                            <label class="form-label">Template Name</label>
+                            <input type="text" class="form-input" id="tplName" placeholder="e.g., Critical Incident Escalation">
+                            <div class="error-message" id="tplName-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Module</label>
+                            <select class="form-select" id="tplModule">
+                                <option value="incidents" selected>Incident Management</option>
+                                <option value="work-permits">Work Permits</option>
+                                <option value="audits">Audit Management</option>
+                            </select>
+                            <div class="error-message" id="tplModule-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-textarea" rows="3" id="tplDescription" placeholder="Describe the purpose of this escalation..."></textarea>
+                            <div class="error-message" id="tplDescription-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="step-content hidden" id="step-2">
+                        <h3>Applicability Rules</h3>
+                        <p style="color:var(--text-muted); margin-bottom:1rem;">Define when this template applies.</p>
+                        <div id="rulesContainer">
+                            <div class="rule-row">
+                                <select class="form-select rule-field" style="width:30%">
+                                    <option value="priority" selected>Priority</option>
+                                    <option value="status">Status</option>
+                                    <option value="department">Department</option>
+                                    <option value="severity">Severity</option>
+                                    <option value="location">Location</option>
+                                </select>
+                                <select class="form-select rule-operator" style="width:30%">
+                                    <option value="equals" selected>Equals</option>
+                                    <option value="contains">Contains</option>
+                                    <option value="greater_than">Greater Than</option>
+                                </select>
+                                <input type="text" class="form-input rule-value" style="width:30%" placeholder="Enter value">
+                                <button class="btn btn-outline" style="color:var(--danger)" onclick="this.parentElement.remove()">×</button>
+                                <div class="error-message rule-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline" style="font-size:0.8rem; margin-top:0.5rem;" onclick="addRule()">+ Add Condition</button>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="step-content hidden" id="step-3">
+                        <h3>Escalation Hierarchy</h3>
+                        <div class="form-group" style="margin-top:1rem; background:#f1f5f9; padding:1rem; border-radius:var(--radius);">
+                            <label class="form-label">Level 1 Recipient (Immediate)</label>
+                            <select class="form-select" id="level1Recipient">
+                                <option value="direct-manager" selected>Direct Manager</option>
+                                <option value="safety-officer">Safety Officer</option>
+                            </select>
+                            <div class="error-message" id="level1Recipient-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                        </div>
+                        <div class="form-group" style="background:#f1f5f9; padding:1rem; border-radius:var(--radius);">
+                            <label class="form-label">Level 2 Recipient (After 24h)</label>
+                            <select class="form-select" id="level2Recipient">
+                                <option value="department-head" selected>Department Head</option>
+                                <option value="site-manager">Site Manager</option>
+                            </select>
+                            <div class="error-message" id="level2Recipient-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="step-content hidden" id="step-4">
+                        <h3>Triggers</h3>
+                        <div class="form-group">
+                            <label class="form-label">Common Configurations</label>
+                            <select class="form-select" id="commonTrigger">
+                                <option value="" selected>Custom Configuration</option>
+                                <option value="2_days_before">2 Days Before Due Date</option>
+                                <option value="1_day_before">1 Day Before Due Date</option>
+                                <option value="1_hour_after">1 Hour After Overdue</option>
+                                <option value="status_change">On Status Change to Critical</option>
+                                <option value="priority_change">On Priority Escalation</option>
+                            </select>
+                            <div class="error-message" id="commonTrigger-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Trigger Type</label>
+                            <div style="display:flex; gap:1rem; margin-bottom:1rem;">
+                                <label style="display:flex; align-items:center; gap:0.5rem;">
+                                    <input type="radio" name="triggerType" value="time-based" checked> Time-based (e.g., 2 days before due)
+                                </label>
+                                <label style="display:flex; align-items:center; gap:0.5rem;">
+                                    <input type="radio" name="triggerType" value="event-based"> Event-based (e.g., Status change)
+                                </label>
+                            </div>
+                            <div class="error-message" id="triggerType-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                        </div>
+                        <div class="form-group" id="timeConfig">
+                            <label class="form-label">Time Offset</label>
+                            <div style="display:flex; gap:0.5rem; align-items:center;">
+                                <input type="number" class="form-input" id="timeValue" value="2" min="1" style="width:80px">
+                                <select class="form-select" id="timeUnit" style="width:120px">
+                                    <option value="days" selected>Days</option>
+                                    <option value="hours">Hours</option>
+                                </select>
+                                <select class="form-select" id="timeDirection" style="width:150px">
+                                    <option value="before_due" selected>Before Due Date</option>
+                                    <option value="after_overdue">After Overdue</option>
+                                </select>
+                            </div>
+                            <div class="error-message" id="timeConfig-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                        </div>
+                        <div class="form-group hidden" id="eventConfig">
+                            <label class="form-label">Event Type</label>
+                            <select class="form-select" id="eventType">
+                                <option value="status_change" selected>Status Change</option>
+                                <option value="priority_change">Priority Change</option>
+                                <option value="assignment_change">Assignment Change</option>
+                            </select>
+                            <div class="error-message" id="eventType-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step 5 -->
+                    <div class="step-content hidden" id="step-5">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:2rem;">
+                            <div>
+                                <h3>Configure Notification</h3>
+                                <div class="form-group">
+                                    <label class="form-label">Email Subject</label>
+                                    <input type="text" class="form-input" id="emailSubject" value="URGENT: Incident #{{id}} Requires Action">
+                                    <div class="error-message" id="emailSubject-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Email Body</label>
+                                    <textarea class="form-textarea" rows="10" id="emailBody">Dear {{role}},
+
+The incident {{title}} at {{location}} is approaching its due date.
+
+Status: {{status}}
+Due Date: {{dueDate}}
+
+Please review immediately to ensure compliance.
+
+[Link to Record]</textarea>
+                                    <div class="error-message" id="emailBody-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                                    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.5rem;">Available variables: {{id}}, {{title}}, {{location}}, {{dueDate}}, {{status}}, {{role}}</p>
+                                    <div id="charCounter" style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">Characters: 0</div>
+                                </div>
+                            </div>
+                            <div>
+                                <h3>Mobile Preview</h3>
+                                <div class="preview-wrapper">
+                                    <div class="mobile-frame">
+                                        <div class="mobile-header">
+                                            Inbox
+                                        </div>
+                                        <div class="mobile-body">
+                                            <div style="font-weight:700; margin-bottom:0.5rem;" id="previewSubject">URGENT: Incident #1234 Requires Action</div>
+                                            <div style="color:#666; margin-bottom:1rem; font-size:0.8rem;">From: EHS System</div>
+                                            <div id="previewBody">
+                                                Dear Manager,<br><br>
+                                                The incident "Chemical Spill" at Plant A is approaching its due date.<br><br>
+                                                Status: Open<br>
+                                                Due Date: 2025-12-15<br><br>
+                                                Please review immediately.
+                                            </div>
+                                            <a href="#" class="action-btn">View Record</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wizard-footer">
+                    <button class="btn btn-outline" id="prevBtn" disabled>Back</button>
+                    <button class="btn btn-primary" id="nextBtn">Next Step</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Notifications -->
+        <div id="view-notifications" class="view-section hidden">
+            <div style="background:var(--surface); border-radius:var(--radius); border:1px solid var(--border);">
+                <div style="padding:1rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="font-size:1rem;">Recent Alerts</h3>
+                    <button class="btn btn-outline" style="font-size:0.8rem;">Mark All Read</button>
+                </div>
+                <div id="notificationList">
+                    <!-- JS Injected -->
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Gamification -->
+        <div id="view-gamification" class="view-section hidden">
+            <div class="gamification-header">
+                <div>
+                    <h2 style="margin-bottom:0.5rem;">Safety Champion Level 5</h2>
+                    <p>You are in the top 5% of responders this month! Keep it up!</p>
+                    <div style="background:rgba(255,255,255,0.2); height:8px; border-radius:4px; margin-top:1rem; width:300px; overflow:hidden;">
+                        <div style="background:var(--success); width:85%; height:100%;"></div>
+                    </div>
+                    <p style="font-size:0.8rem; margin-top:0.5rem;">1,250 / 1,500 XP to next level</p>
+                </div>
+                <div class="level-badge">
+                    <span style="font-size:1.5rem; font-weight:700;">5</span>
+                    <span style="font-size:0.6rem;">LEVEL</span>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom:1rem;">Your Achievements</h3>
+            <div class="badges-grid">
+                <div class="badge-card">
+                    <div class="badge-icon">⚡</div>
+                    <h4>Fast Responder</h4>
+                    <p style="font-size:0.8rem; color:var(--text-muted);">Resolved 5 criticals < 1h</p>
+                </div>
+                <div class="badge-card">
+                    <div class="badge-icon">🛡️</div>
+                    <h4>Guardian</h4>
+                    <p style="font-size:0.8rem; color:var(--text-muted);">Zero overdue tasks in Q3</p>
+                </div>
+                <div class="badge-card">
+                    <div class="badge-icon">🎯</div>
+                    <h4>Perfectionist</h4>
+                    <p style="font-size:0.8rem; color:var(--text-muted);">100% Audit Compliance</p>
+                </div>
+                <div class="badge-card locked">
+                    <div class="badge-icon">👑</div>
+                    <h4>Legend</h4>
+                    <p style="font-size:0.8rem; color:var(--text-muted);">Year-long streak</p>
+                </div>
+            </div>
+            
+            <div style="margin-top:2rem;">
+                <h3 style="margin-bottom:1rem;">Team Leaderboard</h3>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);">
+                    <table style="width:100%; border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--border); text-align:left;">
+                                <th style="padding:1rem;">Rank</th>
+                                <th style="padding:1rem;">User</th>
+                                <th style="padding:1rem;">Response Time</th>
+                                <th style="padding:1rem;">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody">
+                            <!-- JS Injected -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="notification-toast">
+        <h4 style="margin-bottom:0.25rem;">Escalation Triggered</h4>
+        <p style="font-size:0.875rem;">Incident #402 has escalated to Level 2.</p>
+    </div>
+
+    <script>
+        // --- DATA STORE ---
+        const store = {
+            currentStep: 1,
+            escalations: [
+                { module: 'Incidents', count: 14 },
+                { module: 'Permits', count: 8 },
+                { module: 'Audits', count: 10 }
+            ],
+            recentActivity: [
+                { id: 1, text: 'CRITICAL: Gas leak incident escalated to Level 2 - Karen Plant Manager notified', time: '5 mins ago', type: 'warning' },
+                { id: 2, text: 'High Risk Permit WP-2025-003 triggered enhanced monitoring', time: '15 mins ago', type: 'warning' },
+                { id: 3, text: 'Audit Finding AUD-2025-001 overdue - escalated to CEO', time: '1 hour ago', type: 'error' },
+                { id: 4, text: 'Template "Expired Permit Follow-up" triggered for WP-2025-006', time: '2 hours ago', type: 'warning' },
+                { id: 5, text: 'Medium Priority Incident INC-2025-008 requires review', time: '3 hours ago', type: 'info' },
+                { id: 6, text: 'Low Priority Incident INC-2025-012 weekly review completed', time: '1 day ago', type: 'success' },
+                { id: 7, text: 'Permit WP-2025-001 expires in 6 days - Level 1 warning sent', time: '6 hours ago', type: 'warning' },
+                { id: 8, text: 'Audit Finding AUD-2025-004 follow-up sent to Lisa Brown', time: '8 hours ago', type: 'info' }
+            ],
+            notifications: [
+                { id: 101, title: 'CRITICAL: Gas Leak Incident - Level 2 Escalation', body: 'Natural gas leak detected. Department Head and Plant Manager notified. Immediate action required.', time: '5m ago', read: false },
+                { id: 102, title: 'HIGH RISK: Permit WP-2025-003 Enhanced Monitoring', body: 'High-risk confined space permit activated. Enhanced monitoring protocols in effect.', time: '15m ago', read: false },
+                { id: 103, title: 'OVERDUE: Audit Finding AUD-2025-003 - CEO Escalation', body: 'Chemical storage audit finding is 2 days overdue. CEO and Executive team notified.', time: '1h ago', read: false },
+                { id: 104, title: 'EXPIRED: Permit WP-2025-006 Closure Required', body: 'Floor cleaning permit expired. Work must stop immediately and permit closed.', time: '2h ago', read: false },
+                { id: 105, title: 'Permit WP-2025-002 Expires Tomorrow', body: 'Roof repair permit expires in 24 hours. Renewal or closure required.', time: '3h ago', read: false },
+                { id: 106, title: 'Audit Finding AUD-2025-001 Due in 5 Days', body: 'Safety procedure compliance review due December 16. High priority.', time: '4h ago', read: false },
+                { id: 107, title: 'Incident INC-2025-008 Status Update Required', body: 'Conveyor malfunction incident needs status update. Currently open for 4 hours.', time: '5h ago', read: true },
+                { id: 108, title: 'Weekly Incident Review - INC-2025-012', body: 'Low priority walkway clutter incident reviewed. No action required.', time: '1d ago', read: true },
+                { id: 109, title: 'Permit WP-2025-001 7-Day Warning', body: 'Electrical maintenance permit expires in 6 days. Monitor closely.', time: '6h ago', read: true },
+                { id: 110, title: 'Audit Finding AUD-2025-004 Progress Update', body: 'Emergency exit accessibility audit - 15 days remaining. On track.', time: '8h ago', read: true }
+            ],
+            leaderboard: [
+                { rank: 1, name: 'Sarah Johnson', time: '1.2 hrs', score: 2450 },
+                { rank: 2, name: 'Mike Davis', time: '2.5 hrs', score: 2100 },
+                { rank: 3, name: 'Karen PlantManager', time: '3.1 hrs', score: 1850 },
+                { rank: 4, name: 'Lisa Brown', time: '4.0 hrs', score: 1600 },
+                { rank: 5, name: 'David Chen', time: '4.5 hrs', score: 1520 },
+                { rank: 6, name: 'Jennifer Kim', time: '5.2 hrs', score: 1380 },
+                { rank: 7, name: 'Robert Taylor', time: '6.1 hrs', score: 1250 },
+                { rank: 8, name: 'Anna Petrov', time: '7.0 hrs', score: 1100 }
+            ]
+        };
+
+        // --- NAVIGATION LOGIC ---
+        const navLinks = document.querySelectorAll('.nav-link');
+        const views = document.querySelectorAll('.view-section');
+        const pageTitle = document.getElementById('pageTitle');
+        const sidebar = document.getElementById('sidebar');
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                
+                // Active State
+                navLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+
+                // View Switching
+                const targetView = link.dataset.view;
+                views.forEach(view => {
+                    if (view.id === `view-${targetView}`) {
+                        view.classList.remove('hidden');
+                    } else {
+                        view.classList.add('hidden');
+                    }
+                });
+
+                // Title Update
+                pageTitle.textContent = link.querySelector('span:not(.badge)').nextSibling.textContent.trim();
+
+                // Mobile Sidebar Close
+                if (window.innerWidth <= 768) {
+                    sidebar.classList.remove('active');
+                }
+            });
+        });
+
+        document.getElementById('menuToggle').addEventListener('click', () => {
+            sidebar.classList.toggle('active');
+        });
+
+        // Quick Create Button -> Go to Templates
+        document.getElementById('quickCreateBtn').addEventListener('click', () => {
+            document.querySelector('[data-view="templates"]').click();
+        });
+
+
+        // --- DASHBOARD RENDER ---
+        function renderDashboard() {
+            // Render Chart
+            const chartContainer = document.getElementById('dashboardChart');
+            const maxVal = Math.max(...store.escalations.map(e => e.count));
+            
+            chartContainer.innerHTML = store.escalations.map(item => `
+                <div class="bar-group">
+                    <div class="bar" style="height: ${(item.count / maxVal) * 100}%" data-value="${item.count}"></div>
+                    <div class="bar-label">${item.module}</div>
+                </div>
+            `).join('');
+
+            // Render Activity
+            const activityList = document.getElementById('recentActivityList');
+            activityList.innerHTML = store.recentActivity.map(act => `
+                <li style="padding: 0.75rem 0; border-bottom: 1px solid var(--border); display:flex; gap:0.5rem;">
+                    <span style="color:${getColorByType(act.type)}">●</span>
+                    <div>
+                        <div>${act.text}</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">${act.time}</div>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function getColorByType(type) {
+            if(type === 'warning') return 'var(--warning)';
+            if(type === 'success') return 'var(--success)';
+            return 'var(--primary)';
+        }
+
+        // --- VALIDATION FUNCTIONS ---
+        function showError(elementId, message) {
+            const errorEl = document.getElementById(elementId + '-error');
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        function hideError(elementId) {
+            const errorEl = document.getElementById(elementId + '-error');
+            if (errorEl) {
+                errorEl.style.display = 'none';
+            }
+        }
+
+        function validateStep1() {
+            let isValid = true;
+            const name = document.getElementById('tplName').value.trim();
+            const module = document.getElementById('tplModule').value;
+            const desc = document.getElementById('tplDescription').value.trim();
+
+            if (!name) {
+                showError('tplName', 'Template name is required');
+                isValid = false;
+            } else {
+                hideError('tplName');
+            }
+
+            if (!module) {
+                showError('tplModule', 'Module selection is required');
+                isValid = false;
+            } else {
+                hideError('tplModule');
+            }
+
+            if (!desc) {
+                showError('tplDescription', 'Description is required');
+                isValid = false;
+            } else {
+                hideError('tplDescription');
+            }
+
+            return isValid;
+        }
+
+        function validateStep2() {
+            const rules = document.querySelectorAll('#rulesContainer .rule-row');
+            let isValid = rules.length > 0;
+
+            if (!isValid) {
+                // Show error for rules container
+                const container = document.getElementById('rulesContainer');
+                let errorEl = container.querySelector('.rules-error');
+                if (!errorEl) {
+                    errorEl = document.createElement('div');
+                    errorEl.className = 'error-message rules-error';
+                    errorEl.style.cssText = 'color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem;';
+                    container.appendChild(errorEl);
+                }
+                errorEl.textContent = 'At least one rule is required';
+                errorEl.style.display = 'block';
+            } else {
+                const errorEl = document.querySelector('.rules-error');
+                if (errorEl) errorEl.style.display = 'none';
+
+                // Validate each rule
+                rules.forEach(rule => {
+                    const value = rule.querySelector('.rule-value').value.trim();
+                    const errorEl = rule.querySelector('.rule-error');
+                    if (!value) {
+                        errorEl.textContent = 'Value is required';
+                        errorEl.style.display = 'block';
+                        isValid = false;
+                    } else {
+                        errorEl.style.display = 'none';
+                    }
+                });
+            }
+
+            return isValid;
+        }
+
+        function validateStep3() {
+            let isValid = true;
+            const level1 = document.getElementById('level1Recipient').value;
+            const level2 = document.getElementById('level2Recipient').value;
+
+            if (!level1) {
+                showError('level1Recipient', 'Level 1 recipient is required');
+                isValid = false;
+            } else {
+                hideError('level1Recipient');
+            }
+
+            if (!level2) {
+                showError('level2Recipient', 'Level 2 recipient is required');
+                isValid = false;
+            } else {
+                hideError('level2Recipient');
+            }
+
+            return isValid;
+        }
+
+        function validateStep4() {
+            let isValid = true;
+            const triggerType = document.querySelector('input[name="triggerType"]:checked');
+            const commonTrigger = document.getElementById('commonTrigger').value;
+
+            if (!triggerType) {
+                showError('triggerType', 'Trigger type must be selected');
+                isValid = false;
+            } else {
+                hideError('triggerType');
+
+                if (triggerType.value === 'time-based') {
+                    const timeValue = parseInt(document.getElementById('timeValue').value);
+                    if (isNaN(timeValue) || timeValue < 1) {
+                        showError('timeConfig', 'Time value must be a positive number');
+                        isValid = false;
+                    } else {
+                        hideError('timeConfig');
+                    }
+                } else if (triggerType.value === 'event-based') {
+                    const eventType = document.getElementById('eventType').value;
+                    if (!eventType) {
+                        showError('eventType', 'Event type must be selected');
+                        isValid = false;
+                    } else {
+                        hideError('eventType');
+                    }
+                }
+            }
+
+            return isValid;
+        }
+
+        function validateStep5() {
+            let isValid = true;
+            const subject = document.getElementById('emailSubject').value.trim();
+            const body = document.getElementById('emailBody').value.trim();
+
+            if (!subject) {
+                showError('emailSubject', 'Email subject is required');
+                isValid = false;
+            } else {
+                hideError('emailSubject');
+            }
+
+            if (!body) {
+                showError('emailBody', 'Email body is required');
+                isValid = false;
+            } else {
+                hideError('emailBody');
+            }
+
+            return isValid;
+        }
+
+        function validateCurrentStep() {
+            switch (store.currentStep) {
+                case 1: return validateStep1();
+                case 2: return validateStep2();
+                case 3: return validateStep3();
+                case 4: return validateStep4();
+                case 5: return validateStep5();
+                default: return true;
+            }
+        }
+
+        // --- WIZARD LOGIC ---
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const stepItems = document.querySelectorAll('.step-item');
+        const stepContents = document.querySelectorAll('.step-content');
+
+        function updateWizard() {
+            // Steps UI
+            stepItems.forEach(item => {
+                const step = parseInt(item.dataset.step);
+                if (step === store.currentStep) item.classList.add('active');
+                else item.classList.remove('active');
+            });
+
+            // Content Visibility
+            stepContents.forEach(content => {
+                if (content.id === `step-${store.currentStep}`) content.classList.remove('hidden');
+                else content.classList.add('hidden');
+            });
+
+            // Button States
+            prevBtn.disabled = store.currentStep === 1;
+            nextBtn.textContent = store.currentStep === 5 ? 'Finish & Save' : 'Next Step';
+
+            // Special: Update preview on step 5
+            if (store.currentStep === 5) updatePreview();
+        }
+
+        nextBtn.addEventListener('click', () => {
+            if (store.currentStep < 5) {
+                if (validateCurrentStep()) {
+                    console.log(`Wizard: Moving from step ${store.currentStep} to ${store.currentStep + 1}`);
+                    store.currentStep++;
+                    updateWizard();
+                } else {
+                    console.warn(`Wizard: Validation failed for step ${store.currentStep}`);
+                }
+            } else {
+                if (validateCurrentStep()) {
+                    // Collect form data
+                    const templateData = collectFormData();
+                    console.log('Template Data Collected:', templateData);
+                    console.log('Wizard: Template validation would be performed here');
+                    // Finish Action
+                    showToast("Template Saved Successfully!");
+                    setTimeout(() => {
+                        console.log('Wizard: Resetting wizard and navigating to dashboard');
+                        // Reset
+                        resetWizard();
+                        document.querySelector('[data-view="dashboard"]').click();
+                    }, 1500);
+                } else {
+                    console.warn('Wizard: Final validation failed');
+                }
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (store.currentStep > 1) {
+                store.currentStep--;
+                updateWizard();
+            }
+        });
+
+        // Step Navigation via Indicators
+        stepItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const target = parseInt(item.dataset.step);
+                if (target <= store.currentStep || canNavigateToStep(target)) {
+                    store.currentStep = target;
+                    updateWizard();
+                } else {
+                    showToast("Please complete previous steps first.");
+                }
+            });
+        });
+
+        function canNavigateToStep(target) {
+            for (let i = 1; i < target; i++) {
+                store.currentStep = i;
+                if (!validateCurrentStep()) {
+                    store.currentStep = target > i ? i : store.currentStep;
+                    return false;
+                }
+            }
+            store.currentStep = target;
+            return true;
+        }
+
+        function collectFormData() {
+             console.log('Wizard: Collecting form data');
+             const rules = [];
+             document.querySelectorAll('#rulesContainer .rule-row').forEach((row, index) => {
+                 const rule = {
+                     field: row.querySelector('.rule-field').value,
+                     operator: row.querySelector('.rule-operator').value,
+                     value: row.querySelector('.rule-value').value
+                 };
+                 rules.push(rule);
+                 console.log(`Wizard: Rule ${index + 1}:`, rule);
+             });
+
+             const templateData = {
+                 name: document.getElementById('tplName').value,
+                 module: document.getElementById('tplModule').value,
+                 description: document.getElementById('tplDescription').value,
+                 rules: rules,
+                 hierarchy: {
+                     level1: document.getElementById('level1Recipient').value,
+                     level2: document.getElementById('level2Recipient').value
+                 },
+                 trigger: {
+                     common: document.getElementById('commonTrigger').value,
+                     type: document.querySelector('input[name="triggerType"]:checked')?.value,
+                     timeValue: document.getElementById('timeValue').value,
+                     timeUnit: document.getElementById('timeUnit').value,
+                     timeDirection: document.getElementById('timeDirection').value,
+                     eventType: document.getElementById('eventType').value
+                 },
+                 notification: {
+                     subject: document.getElementById('emailSubject').value,
+                     body: document.getElementById('emailBody').value
+                 }
+             };
+
+             console.log('Wizard: Collected template data structure:', templateData);
+             return templateData;
+         }
+
+        function resetWizard() {
+            // Reset step
+            store.currentStep = 1;
+            updateWizard();
+
+            // Clear form fields
+            document.getElementById('tplName').value = '';
+            document.getElementById('tplModule').selectedIndex = 0;
+            document.getElementById('tplDescription').value = '';
+
+            // Clear rules
+            const rulesContainer = document.getElementById('rulesContainer');
+            rulesContainer.innerHTML = `
+                <div class="rule-row">
+                    <select class="form-select rule-field" style="width:30%">
+                        <option value="priority" selected>Priority</option>
+                        <option value="status">Status</option>
+                        <option value="department">Department</option>
+                        <option value="severity">Severity</option>
+                        <option value="location">Location</option>
+                    </select>
+                    <select class="form-select rule-operator" style="width:30%">
+                        <option value="equals" selected>Equals</option>
+                        <option value="contains">Contains</option>
+                        <option value="greater_than">Greater Than</option>
+                    </select>
+                    <input type="text" class="form-input rule-value" style="width:30%" placeholder="Enter value">
+                    <button class="btn btn-outline" style="color:var(--danger)" onclick="this.parentElement.remove()">×</button>
+                    <div class="error-message rule-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+                </div>
+            `;
+
+            // Reset hierarchy
+            document.getElementById('level1Recipient').selectedIndex = 0;
+            document.getElementById('level2Recipient').selectedIndex = 0;
+
+            // Reset triggers
+            document.getElementById('commonTrigger').selectedIndex = 0;
+            document.querySelector('input[name="triggerType"][value="time-based"]').checked = true;
+            document.getElementById('timeValue').value = 2;
+            document.getElementById('timeUnit').selectedIndex = 0;
+            document.getElementById('timeDirection').selectedIndex = 0;
+            document.getElementById('eventType').selectedIndex = 0;
+            toggleTriggerConfig();
+
+            // Reset notification
+            document.getElementById('emailSubject').value = 'URGENT: Incident #{{id}} Requires Action';
+            document.getElementById('emailBody').value = `Dear {{role}},
+
+The incident {{title}} at {{location}} is approaching its due date.
+
+Status: {{status}}
+Due Date: {{dueDate}}
+
+Please review immediately to ensure compliance.
+
+[Link to Record]`;
+
+            // Hide all errors
+            document.querySelectorAll('.error-message').forEach(el => el.style.display = 'none');
+
+            // Update preview
+            updatePreview();
+        }
+
+        // Dynamic Rule Addition
+        window.addRule = function() {
+            const container = document.getElementById('rulesContainer');
+            const div = document.createElement('div');
+            div.className = 'rule-row';
+            div.innerHTML = `
+                <select class="form-select rule-field" style="width:30%">
+                    <option value="priority" selected>Priority</option>
+                    <option value="status">Status</option>
+                    <option value="department">Department</option>
+                    <option value="severity">Severity</option>
+                    <option value="location">Location</option>
+                </select>
+                <select class="form-select rule-operator" style="width:30%">
+                    <option value="equals" selected>Equals</option>
+                    <option value="contains">Contains</option>
+                    <option value="greater_than">Greater Than</option>
+                </select>
+                <input type="text" class="form-input rule-value" style="width:30%" placeholder="Enter value">
+                <button class="btn btn-outline" style="color:var(--danger)" onclick="this.parentElement.remove()">×</button>
+                <div class="error-message rule-error" style="color: var(--danger); font-size: 0.75rem; margin-top: 0.25rem; display: none;"></div>
+            `;
+            container.appendChild(div);
+        }
+
+        // Live Preview Update
+        const subjectInput = document.getElementById('emailSubject');
+        const bodyInput = document.getElementById('emailBody');
+        const previewSubject = document.getElementById('previewSubject');
+        const previewBody = document.getElementById('previewBody');
+
+        function sanitizeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function updatePreview() {
+             console.log('Wizard: Updating preview');
+             const variables = {
+                 '{{id}}': '1234',
+                 '{{role}}': 'Manager',
+                 '{{title}}': 'Chemical Spill',
+                 '{{location}}': 'Plant A',
+                 '{{status}}': 'Open',
+                 '{{dueDate}}': '2025-12-15'
+             };
+
+             let sub = subjectInput.value;
+             let body = bodyInput.value;
+             console.log('Wizard: Original subject:', sub);
+             console.log('Wizard: Original body:', body.substring(0, 100) + '...');
+
+             // Replace variables
+             Object.keys(variables).forEach(key => {
+                 const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                 sub = sub.replace(regex, variables[key]);
+                 body = body.replace(regex, variables[key]);
+             });
+
+             // Handle missing variables - replace with placeholder
+             sub = sub.replace(/\{\{[^}]+\}\}/g, '[MISSING]');
+             body = body.replace(/\{\{[^}]+\}\}/g, '[MISSING]');
+
+             console.log('Wizard: Processed subject:', sub);
+             console.log('Wizard: Processed body length:', body.length);
+
+             // Sanitize and format
+             previewSubject.textContent = sanitizeHtml(sub);
+             previewBody.innerHTML = sanitizeHtml(body).replace(/\n/g, '<br>');
+             console.log('Wizard: Preview updated successfully');
+         }
+
+        // Character counter
+        function updateCharCounter() {
+            const body = bodyInput.value;
+            const charCount = body.length;
+            document.getElementById('charCounter').textContent = `Characters: ${charCount}`;
+        }
+
+        subjectInput.addEventListener('input', updatePreview);
+        bodyInput.addEventListener('input', () => {
+            updatePreview();
+            updateCharCounter();
+        });
+
+        // Real-time validation
+        document.getElementById('tplName').addEventListener('blur', () => {
+            if (document.getElementById('tplName').value.trim()) hideError('tplName');
+        });
+        document.getElementById('tplDescription').addEventListener('blur', () => {
+            if (document.getElementById('tplDescription').value.trim()) hideError('tplDescription');
+        });
+        document.getElementById('timeValue').addEventListener('input', () => {
+            const val = parseInt(document.getElementById('timeValue').value);
+            if (val >= 1) hideError('timeConfig');
+        });
+
+        // Initialize character counter
+        updateCharCounter();
+
+        // --- NOTIFICATIONS & GAMIFICATION RENDER ---
+        function renderNotifications() {
+            const list = document.getElementById('notificationList');
+            list.innerHTML = store.notifications.map(n => `
+                <div style="padding:1rem; border-bottom:1px solid var(--border); background:${n.read ? 'white' : '#f0f9ff'}; display:flex; justify-content:space-between; align-items:start;">
+                    <div>
+                        <div style="font-weight:600; margin-bottom:0.25rem;">${n.title}</div>
+                        <div style="font-size:0.875rem; color:var(--text-muted); margin-bottom:0.5rem;">${n.body}</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">${n.time}</div>
+                    </div>
+                    ${!n.read ? '<span style="width:10px; height:10px; background:var(--primary); border-radius:50%; display:block;"></span>' : ''}
+                </div>
+            `).join('');
+        }
+
+        function renderLeaderboard() {
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = store.leaderboard.map((user, index) => `
+                <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:1rem; font-weight:600;">#${user.rank}</td>
+                    <td style="padding:1rem;">
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <div class="avatar" style="width:30px; height:30px; font-size:0.8rem; background:${index === 0 ? 'gold' : 'var(--secondary)'}">${user.name.charAt(0)}</div>
+                            ${user.name}
+                        </div>
+                    </td>
+                    <td style="padding:1rem;">${user.time}</td>
+                    <td style="padding:1rem; font-family:monospace; font-weight:700;">${user.score}</td>
+                </tr>
+            `).join('');
+        }
+
+        // --- TOAST UTILS ---
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.querySelector('p').textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Trigger configuration logic
+        function toggleTriggerConfig() {
+            const isTime = document.querySelector('input[name="triggerType"]:checked').value === 'time-based';
+            document.getElementById('timeConfig').classList.toggle('hidden', !isTime);
+            document.getElementById('eventConfig').classList.toggle('hidden', isTime);
+        }
+
+        document.getElementById('commonTrigger').addEventListener('change', function() {
+            const value = this.value;
+            if (value === '2_days_before') {
+                document.querySelector('input[name="triggerType"][value="time-based"]').checked = true;
+                document.getElementById('timeValue').value = 2;
+                document.getElementById('timeUnit').value = 'days';
+                document.getElementById('timeDirection').value = 'before_due';
+            } else if (value === '1_day_before') {
+                document.querySelector('input[name="triggerType"][value="time-based"]').checked = true;
+                document.getElementById('timeValue').value = 1;
+                document.getElementById('timeUnit').value = 'days';
+                document.getElementById('timeDirection').value = 'before_due';
+            } else if (value === '1_hour_after') {
+                document.querySelector('input[name="triggerType"][value="time-based"]').checked = true;
+                document.getElementById('timeValue').value = 1;
+                document.getElementById('timeUnit').value = 'hours';
+                document.getElementById('timeDirection').value = 'after_overdue';
+            } else if (value === 'status_change') {
+                document.querySelector('input[name="triggerType"][value="event-based"]').checked = true;
+                document.getElementById('eventConfig').querySelector('select').value = 'status_change';
+            } else if (value === 'priority_change') {
+                document.querySelector('input[name="triggerType"][value="event-based"]').checked = true;
+                document.getElementById('eventConfig').querySelector('select').value = 'priority_change';
+            }
+            toggleTriggerConfig();
+        });
+
+        document.querySelectorAll('input[name="triggerType"]').forEach(radio => {
+            radio.addEventListener('change', toggleTriggerConfig);
+        });
+
+        // --- INITIALIZATION ---
+        (function init() {
+            renderDashboard();
+            renderNotifications();
+            renderLeaderboard();
+            toggleTriggerConfig(); // Initialize trigger config visibility
+
+            // Simulate an incoming notification after 5 seconds
+            setTimeout(() => {
+                store.notifications.unshift({
+                    id: 999,
+                    title: 'New Escalation',
+                    body: 'Incident #402 has escalated to Level 2.',
+                    time: 'Just now',
+                    read: false
+                });
+                document.getElementById('notif-badge').textContent = parseInt(document.getElementById('notif-badge').textContent) + 1;
+                renderNotifications();
+                showToast('Incident #402 has escalated to Level 2.');
+            }, 5000);
+        })();
+
+    </script>
+</body>
+</html>

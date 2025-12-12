@@ -120,10 +120,52 @@ export class TemplateProcessor {
             }
         }
 
+        // Validate chronological logic (REQ-005)
+        if (template.triggers && template.triggers.length > 0) {
+            const chronoErrors = this.validateTriggerChronology(template.triggers);
+            errors.push(...chronoErrors);
+        }
+
         return {
             isValid: errors.length === 0,
             errors
         };
+    }
+
+    // Validate chronological logic for time-based triggers
+    validateTriggerChronology(triggers) {
+        const errors = [];
+        const timeTriggers = triggers.filter(t => t.type === 'time-based');
+
+        // Group by reference field
+        const grouped = {};
+        timeTriggers.forEach(t => {
+            if (!grouped[t.referenceField]) {
+                grouped[t.referenceField] = [];
+            }
+            grouped[t.referenceField].push(t);
+        });
+
+        // Check each group
+        Object.keys(grouped).forEach(refField => {
+            const group = grouped[refField].sort((a, b) => a.level - b.level);
+
+            for (let i = 0; i < group.length - 1; i++) {
+                const current = group[i];
+                const next = group[i+1];
+
+                // Calculate effective offsets
+                // daysBefore is negative offset, daysAfter is positive offset
+                const currentOffset = (current.daysAfter || 0) - (current.daysBefore || 0);
+                const nextOffset = (next.daysAfter || 0) - (next.daysBefore || 0);
+
+                if (currentOffset > nextOffset) {
+                    errors.push(`Logical Conflict: Level ${next.level} triggers before Level ${current.level} for field '${refField}'. Please adjust the timing.`);
+                }
+            }
+        });
+
+        return errors;
     }
 
     // Process template for a specific record

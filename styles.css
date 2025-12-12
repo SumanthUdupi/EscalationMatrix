@@ -741,3 +741,161 @@ body {
 .gap-3 { gap: var(--spacing-md); }
 .w-full { width: 100%; }
 .h-full { height: 100%; }
+
+/* --- New Styles for Enhanced UI --- */
+
+/* Tooltips */
+.tooltip-container {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip-icon {
+    cursor: help;
+    color: var(--info-color);
+    margin-left: var(--spacing-xs);
+}
+
+.tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-sm);
+    position: absolute;
+    z-index: 1;
+    bottom: 125%; /* Position above */
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: var(--font-size-xs);
+    font-weight: normal;
+}
+
+.tooltip-container:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Enhanced Table Styles */
+.table th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+}
+
+.table tr {
+    transition: background-color 0.15s ease;
+}
+
+.table tr:hover {
+    background-color: #f8fafc;
+}
+
+/* Bulk Actions Toolbar */
+.bulk-actions {
+    background-color: var(--bg-tertiary);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+    border: 1px solid var(--border-color);
+    animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Logic Connectors for Rules */
+.logic-connector-line {
+    position: absolute;
+    top: -20px;
+    left: 20px;
+    width: 2px;
+    height: 20px;
+    background-color: var(--border-color);
+    z-index: 0;
+}
+
+.logic-operator-badge {
+    position: relative;
+    z-index: 1;
+}
+
+/* Drag Handles */
+.drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    padding: 0 var(--spacing-xs);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Rich Text Editor Simulation */
+.rich-text-editor {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.rte-toolbar {
+    background-color: var(--bg-tertiary);
+    padding: var(--spacing-xs);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+.rte-btn {
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+}
+
+.rte-btn:hover {
+    background-color: rgba(0,0,0,0.05);
+}
+
+.rte-content {
+    min-height: 100px;
+    padding: var(--spacing-sm);
+    background: white;
+}
+
+/* Watcher Chips */
+.watcher-chip {
+    display: inline-flex;
+    align-items: center;
+    background-color: #e0f2fe;
+    color: #0369a1;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    gap: 4px;
+}
+
+.watcher-chip button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    font-size: 1rem;
+    padding: 0;
+    margin-left: 4px;
+    line-height: 1;
+}
